@@ -1,0 +1,26 @@
+﻿ID,TenTask,YeuCauKyNang,ThoiLuong (gio),PhuThuoc,Deadline (ngay),DoUuTien
+T01,Backup DB,Database,6,,2,5
+T02,Update DB Schema,Database,4,T01,4,4
+T03,Migrate Data,Database,8,T02,6,5
+T04,Check Integrity,Database,5,T03,8,3
+T05,Optimize Query,Database,6,T04,10,4
+T06,Write API,Python,5,,4,4
+T07,Create Landing Page,HTML,4,,5,3
+T08,Design Banner,Design,3,,4,2
+T09,Test Login Module,Testing,4,T06,7,3
+T10,UI Fixes,Frontend,3,T07,6,2
+T11,Task 11,Python,4,,8,3
+T12,Task 12,Python,4,,8,3
+T13,Task 13,Python,4,,8,3
+T14,Task 14,Python,4,,8,3
+T15,Task 15,Python,4,,8,3
+T16,Task 16,Python,4,,8,3
+T17,Task 17,Python,4,,8,3
+T18,Task 18,Python,4,,8,3
+T19,Task 19,Python,4,,8,3
+T20,Task 20,Python,4,,8,3
+T21,Task 21,Python,4,,8,3
+T22,Task 22,Python,4,,8,3
+T23,Task 23,Python,4,,8,3
+T24,Task 24,Python,4,,8,3
+T25,Task 25,Python,4,,8,3
