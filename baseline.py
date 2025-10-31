@@ -138,7 +138,7 @@ def is_consistent(tacvu: TacVu, assignment: CSPAssignment, csp: CSP) -> bool:
     return True
 
 def select_next_unassigned_variable(csp: CSP) -> Optional[TacVu]:
-    """Chọn tác vụ chưa được gán tiếp theo (ưu tiên cao nhất, hạn chót sớm hơn)"""
+    """Chọn tác vụ chưa được gán tiếp theo"""
     unassigned_tasks = [tacvu for tacvu in csp.cac_tacvu if tacvu.id not in csp.assignment]
     if not unassigned_tasks:
         return None
@@ -153,8 +153,7 @@ def select_next_unassigned_variable(csp: CSP) -> Optional[TacVu]:
     if not ready_tasks:
         return None
     
-    # Sắp xếp theo độ ưu tiên (giảm dần), rồi theo hạn chót (tăng dần)
-    return max(ready_tasks, key=lambda t: (t.priority, -t.deadline))
+    return ready_tasks[0]
 
 def get_domain_values(tacvu: TacVu, csp: CSP) -> List[CSPAssignment]:
     """Lấy tất cả các phương án gán hợp lệ cho một tác vụ"""
