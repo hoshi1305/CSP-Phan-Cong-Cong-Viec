@@ -1,4 +1,4 @@
-# Mô hinh baseline(Backtracking) và mô hình chính với thuật toán Heuristics (MRV + LCV) + Forward Checking
+# Mô hình chính với thuật toán Backtracking + Heuristics (MRV + LCV) + Forward Checking
 import csv
 import pandas as pd
 from datetime import datetime, timedelta
@@ -265,11 +265,11 @@ def order_domain_values_with_lcv(tacvu: TacVu, domain_values: List[CSPAssignment
     # Trả về danh sách assignments đã sắp xếp
     return [assignment for assignment, _ in value_conflict_scores]
 
-def select_variable_with_mrv(csp: CSP) -> Optional[TacVu]:
+def select_variable_with_mrv(csp: CSP, current_domains: Dict[str, List[CSPAssignment]]) -> Optional[TacVu]:
     """
     MRV (Minimum Remaining Values) Heuristic
     Chọn tác vụ có ít lựa chọn hợp lệ nhất (fail-fast strategy)
-    Sử dụng miền lưu trong csp.domains
+    Sử dụng current_domains đã được cắt tỉa
     """
     unassigned_tasks = [tacvu for tacvu in csp.cac_tacvu if tacvu.id not in csp.assignment]
     if not unassigned_tasks:
@@ -285,12 +285,12 @@ def select_variable_with_mrv(csp: CSP) -> Optional[TacVu]:
     if not ready_tasks:
         return None
     
-    # Tìm tác vụ có ít lựa chọn hợp lệ nhất dựa trên csp.domains
+    # Tìm tác vụ có ít lựa chọn hợp lệ nhất dựa trên current_domains
     tac_vu_kho_nhat = None
     so_lua_chon_it_nhat = float('inf')
     
     for tacvu in ready_tasks:
-        domain_vals = csp.domains.get(tacvu.id, [])
+        domain_vals = current_domains.get(tacvu.id, [])
         so_lua_chon = len(domain_vals)
         if so_lua_chon < so_lua_chon_it_nhat:
             so_lua_chon_it_nhat = so_lua_chon
@@ -300,30 +300,56 @@ def select_variable_with_mrv(csp: CSP) -> Optional[TacVu]:
 
 def forward_checking(csp: CSP, assigned_task_id: str) -> Tuple[bool, Dict[str, List[CSPAssignment]]]:
     """
-    Thực hiện Forward Checking: loại bỏ các giá trị miền không còn hợp lệ trong các miền của tác vụ chưa gán khác.
-    Trả về (success, removed_map) để có thể khôi phục sau khi backtrack.
+    Thực hiện Forward Checking - cắt tỉa domain hàng xóm
+    Mục đích: Phát hiện ngõ cụt sớm và giảm không gian tìm kiếm
+    
+    Trả về (success, removed_map):
+    - success: True nếu không phát hiện ngõ cụt, False nếu có domain trở thành rỗng
+    - removed_map: Map các giá trị đã bị cắt (để khôi phục khi backtrack)
     """
     removed_map: Dict[str, List[CSPAssignment]] = {}
-    # Duyệt các tác vụ chưa gán
-    for other in [t for t in csp.cac_tacvu if t.id not in csp.assignment]:
-        if other.id == assigned_task_id:
-            continue
-        original_domain = csp.domains.get(other.id, [])
-        new_domain = []
-        removed_here: List[CSPAssignment] = []
-        for val in original_domain:
-            # Kiểm tra xem val vẫn consistent khi giữ các assignment hiện tại (bao gồm assignment mới)
-            if is_consistent(other, val, csp):
-                new_domain.append(val)
-            else:
-                removed_here.append(val)
-        if removed_here:
-            removed_map[other.id] = removed_here
-        csp.domains[other.id] = new_domain
-        # Nếu có tác vụ nào mất hết miền -> thất bại ngay
-        if len(csp.domains[other.id]) == 0:
-            return False, removed_map
-    return True, removed_map
+    assigned_task = next(t for t in csp.cac_tacvu if t.id == assigned_task_id)
+    assigned_assignment = csp.assignment[assigned_task_id]
+    
+    # Lấy tất cả hàng xóm của tác vụ vừa gán
+    neighbors = get_neighbors(assigned_task, csp)
+    
+    # Duyệt qua các hàng xóm chưa được gán
+    for neighbor_task in neighbors:
+        if neighbor_task.id not in csp.assignment:
+            original_domain = csp.domains.get(neighbor_task.id, [])
+            new_domain = []
+            removed_here: List[CSPAssignment] = []
+            
+            # Kiểm tra từng giá trị trong domain của hàng xóm
+            for neighbor_value in original_domain:
+                # Kiểm tra xung đột giữa assignment vừa gán và giá trị này
+                has_conflict = check_conflict_between_assignments(
+                    assigned_task, assigned_assignment,
+                    neighbor_task, neighbor_value,
+                    csp
+                )
+                
+                if not has_conflict:
+                    # Không xung đột → giữ lại
+                    new_domain.append(neighbor_value)
+                else:
+                    # Có xung đột → cắt bỏ
+                    removed_here.append(neighbor_value)
+            
+            # Lưu các giá trị đã cắt (để khôi phục sau)
+            if removed_here:
+                removed_map[neighbor_task.id] = removed_here
+            
+            # CẬP NHẬT domain mới (đã cắt tỉa)
+            csp.domains[neighbor_task.id] = new_domain
+            
+            # PHÁT HIỆN NGÕ CỤT SỚM (FAIL-FAST)
+            if len(csp.domains[neighbor_task.id]) == 0:
+                return False, removed_map  # Báo hiệu ngõ cụt!
+    
+    # Cắt tỉa tất cả hàng xóm mà không ai bị rỗng
+    return True, removed_map  # Thành công, có thể tiếp tục
 
 def restore_domains(csp: CSP, removed_map: Dict[str, List[CSPAssignment]]):
     """Khôi phục miền sau khi backtrack dựa vào removed_map"""
@@ -332,78 +358,155 @@ def restore_domains(csp: CSP, removed_map: Dict[str, List[CSPAssignment]]):
             csp.domains[task_id] = []
         csp.domains[task_id].extend(removed_vals)
 
-def recursive_backtracking(csp: CSP, use_heuristics: bool = True, use_forward_checking_flag: bool = True) -> bool:
+def get_neighbors(tacvu: TacVu, csp: CSP) -> List[TacVu]:
+    """
+    Tìm những tác vụ có ràng buộc với tacvu (hàng xóm)
+    Giúp forward_checking biết cần kiểm tra những tác vụ nào
+    
+    Hàng xóm bao gồm:
+    1. Tác vụ phụ thuộc VÀO tacvu
+    2. Tác vụ mà tacvu phụ thuộc VÀO
+    3. Tác vụ cùng kỹ năng yêu cầu (cạnh tranh nhân sự)
+    """
+    neighbors = set()
+    
+    # 1. Tác vụ phụ thuộc VÀO tacvu
+    for other_task in csp.cac_tacvu:
+        if tacvu.id in other_task.dependencies:
+            neighbors.add(other_task)
+    
+    # 2. Tác vụ mà tacvu phụ thuộc VÀO
+    for dep_id in tacvu.dependencies:
+        dep_task = next((t for t in csp.cac_tacvu if t.id == dep_id), None)
+        if dep_task:
+            neighbors.add(dep_task)
+    
+    # 3. Tác vụ cùng kỹ năng yêu cầu (cạnh tranh nhân sự)
+    for other_task in csp.cac_tacvu:
+        if (other_task.required_skill == tacvu.required_skill and 
+            other_task.id != tacvu.id and 
+            other_task.required_skill):  # Chỉ xét nếu có yêu cầu kỹ năng
+            neighbors.add(other_task)
+    
+    return list(neighbors)
+
+def check_conflict_between_assignments(task1: TacVu, assignment1: CSPAssignment, 
+                                       task2: TacVu, assignment2: CSPAssignment, 
+                                       csp: CSP) -> bool:
+    """
+    Kiểm tra xung đột giữa 2 assignment
+    Logic tương tự is_consistent() nhưng cho 2 cặp (task, assignment)
+    
+    Returns:
+        True nếu CÓ XUNG ĐỘT
+        False nếu KHÔNG XUNG ĐỘT
+    """
+    end_time_1 = assignment1.start_time + timedelta(hours=task1.duration)
+    end_time_2 = assignment2.start_time + timedelta(hours=task2.duration)
+    
+    # KIỂM TRA 1: Cùng nhân sự + thời gian trùng lặp?
+    if assignment1.nhansu.id == assignment2.nhansu.id:
+        if (assignment1.start_time < end_time_2 and end_time_1 > assignment2.start_time):
+            return True  # CÓ XUNG ĐỘT
+    
+    # KIỂM TRA 2: Phụ thuộc không thỏa mãn?
+    if task2.id in task1.dependencies:
+        if assignment1.start_time < end_time_2:
+            return True  # CÓ XUNG ĐỘT
+    
+    if task1.id in task2.dependencies:
+        if assignment2.start_time < end_time_1:
+            return True  # CÓ XUNG ĐỘT
+    
+    # KIỂM TRA 3: Deadline bị vượt?
+    task1_deadline = csp.project_start_date + timedelta(days=task1.deadline)
+    if end_time_1 > task1_deadline:
+        return True  # CÓ XUNG ĐỘT
+    
+    task2_deadline = csp.project_start_date + timedelta(days=task2.deadline)
+    if end_time_2 > task2_deadline:
+        return True  # CÓ XUNG ĐỘT
+    
+    # KIỂM TRA 4: Ngoài khung thời gian dự án?
+    if assignment1.start_time < csp.project_start_date or end_time_1 > csp.project_end_date:
+        return True  # CÓ XUNG ĐỘT
+    
+    if assignment2.start_time < csp.project_start_date or end_time_2 > csp.project_end_date:
+        return True  # CÓ XUNG ĐỘT
+    
+    return False  # KHÔNG XUNG ĐỘT
+
+def recursive_backtracking(csp: CSP, current_domains: Dict[str, List[CSPAssignment]]) -> bool:
     """
     Giải bằng thuật toán quay lui đệ quy (backtracking) với MRV + LCV + Forward Checking
+    
+    Args:
+        csp: Đối tượng CSP chứa assignment và thông tin bài toán
+        current_domains: Miền giá trị hiện tại của tầng đệ quy này (đã được cắt tỉa từ các tầng trước)
     """
     # Trường hợp cơ sở: tất cả tác vụ đã được gán
     if len(csp.assignment) == len(csp.cac_tacvu):
         csp.solution_found = True
         return True
     
-    # Chọn biến chưa gán
-    if use_heuristics:
-        tacvu = select_variable_with_mrv(csp)
-    else:
-        # baseline: chọn task đầu tiên sẵn sàng (giữ logic ban đầu)
-        unassigned_tasks = [t for t in csp.cac_tacvu if t.id not in csp.assignment]
-        ready_tasks = [t for t in unassigned_tasks if all(dep in csp.assignment for dep in t.dependencies)]
-        tacvu = ready_tasks[0] if ready_tasks else None
+    # Chọn biến chưa gán bằng MRV Heuristic (luôn dùng)
+    tacvu = select_variable_with_mrv(csp, current_domains)
     
     if tacvu is None:
         # không còn task ready (có thể deadlock) -> thất bại ở nhánh này
         return False
     
-    # Lấy các giá trị miền từ csp.domains (nếu khởi tạo) hoặc sinh mới
-    domain_values = csp.domains.get(tacvu.id, None)
-    if domain_values is None or len(domain_values) == 0:
-        # lấy tạm mới
-        domain_values = get_domain_values(tacvu, csp)
-        csp.domains[tacvu.id] = domain_values
+    # Lấy các giá trị miền từ current_domains (đã được cắt tỉa)
+    domain_values = current_domains.get(tacvu.id, [])
+    if not domain_values:
+        return False
     
-    # Sắp xếp theo LCV nếu dùng heuristic
-    if use_heuristics:
-        domain_values = order_domain_values_with_lcv(tacvu, domain_values, csp)
+    # Sắp xếp theo LCV (Least Constraining Value) - luôn dùng
+    domain_values = order_domain_values_with_lcv(tacvu, domain_values, csp)
     
     # Thử từng giá trị
-    for assignment in list(domain_values):  # copy để an toàn khi sửa domain trong loop
-        # Gán tạm
+    for assignment in list(domain_values):
+        # 1. Thực hiện phép gán
         csp.assignment[tacvu.id] = assignment
         
-        # Khi gán, cập nhật domain của tacvu đó (trở nên rỗng vì đã gán)
-        prev_domain_for_task = csp.domains.get(tacvu.id, [])
-        csp.domains[tacvu.id] = []
+        # 2. TẠO BẢN SAO DOMAIN ĐỂ CHUẨN BỊ "CẮT TỈA" (Deep Copy)
+        new_domains = {}
+        for task_id in current_domains.keys():
+            new_domains[task_id] = current_domains[task_id].copy()
         
-        forward_removed = {}
-        forward_ok = True
-        if use_forward_checking_flag:
-            forward_ok, forward_removed = forward_checking(csp, tacvu.id)
+        # Đánh dấu task hiện tại đã gán (domain rỗng)
+        new_domains[tacvu.id] = []
         
+        # 3. Cập nhật csp.domains để is_consistent() và forward_checking() sử dụng
+        csp.domains = new_domains
+        
+        # 4. THỰC HIỆN FORWARD CHECKING (luôn dùng)
+        # Hàm này sẽ cắt tỉa new_domains và phát hiện ngõ cụt sớm
+        forward_ok, forward_removed = forward_checking(csp, tacvu.id)
+        
+        # 5. Nếu Forward Check không phát hiện ngõ cụt
         if forward_ok:
-            result = recursive_backtracking(csp, use_heuristics, use_forward_checking_flag)
+            # Gọi đệ quy với new_domains đã bị cắt tỉa
+            result = recursive_backtracking(csp, csp.domains)
             if result:
                 return True
         
-        # Quay lui: khôi phục assignment và domains
+        # 6. QUAY LUI (Backtrack) - Xóa assignment hiện tại
         del csp.assignment[tacvu.id]
-        csp.domains[tacvu.id] = prev_domain_for_task
-        if forward_removed:
-            restore_domains(csp, forward_removed)
+        # Vứt bỏ new_domains - vòng lặp tiếp theo dùng current_domains gốc
     
-    # Nếu thử hết domain mà không tìm được -> thất bại ở nhánh này
+    # Nếu đã thử hết các giá trị mà không tìm được lời giải
     return False
 
-def solve_csp(dataset_folder: str, project_start_date: datetime, project_end_date: datetime, 
-              use_heuristics: bool = True, use_forward_checking_flag: bool = True) -> CSP:
+def solve_csp(dataset_folder: str, project_start_date: datetime, project_end_date: datetime) -> CSP:
     """
     Hàm tổng hợp để giải bài toán CSP
+    Luôn sử dụng MRV + LCV + Forward Checking
     
     Args:
         dataset_folder: Đường dẫn tới thư mục dữ liệu
         project_start_date: Ngày bắt đầu dự án
         project_end_date: Ngày kết thúc dự án
-        use_heuristics: True để sử dụng MRV + LCV
-        use_forward_checking_flag: True để sử dụng Forward Checking
     """
     
     # Nạp dữ liệu
@@ -415,8 +518,13 @@ def solve_csp(dataset_folder: str, project_start_date: datetime, project_end_dat
     # Khởi tạo miền ban đầu
     initialize_domains(csp)
     
-    # Giải bằng quay lui với forward checking và heuristics
-    recursive_backtracking(csp, use_heuristics=use_heuristics, use_forward_checking_flag=use_forward_checking_flag)
+    # Tạo bản sao initial_domains để truyền vào đệ quy
+    initial_domains = {}
+    for task_id in csp.domains:
+        initial_domains[task_id] = csp.domains[task_id].copy()
+    
+    # Giải bằng quay lui với MRV + LCV + Forward Checking
+    recursive_backtracking(csp, initial_domains)
     
     return csp
 
@@ -478,28 +586,10 @@ def export_to_csv(csp: CSP, filename: str = "task_assignment.csv"):
 
 def main():
     """Chương trình chính để chạy bộ giải CSP"""
-    print("=== HỆ THỐNG PHÂN CÔNG CÔNG VIỆC SỬ DỤNG CSP ===\n")
+    print("=== HỆ THỐNG PHÂN CÔNG CÔNG VIỆC SỬ DỤNG CSP ===")
+    print("Mô hình: Backtracking + MRV + LCV + Forward Checking\n")
     
-    print("Chọn phương pháp:")
-    print("1. Mô hình chính (Backtracking + MRV + LCV + Forward Checking)")
-    print("2. Baseline (Backtracking cơ bản, không MRV/LCV/FC)")
-    
-    method_choice = input("Nhập lựa chọn (1-2): ").strip()
-    
-    if method_choice not in ['1', '2']:
-        print("Lựa chọn không hợp lệ!")
-        return
-    
-    if method_choice == '1':
-        use_heuristics = True
-        use_forward_checking_flag = True
-        method_name = "Mô hình chính (MRV + LCV + Forward Checking)"
-    else:
-        use_heuristics = False
-        use_forward_checking_flag = False
-        method_name = "Baseline (Backtracking cơ bản)"
-    
-    print("\nChọn bộ dữ liệu:")
+    print("Chọn bộ dữ liệu:")
     print("1. complex_dependency_chain")
     print("2. load_balance") 
     print("3. skill_bottleneck")
@@ -532,7 +622,7 @@ def main():
         return
     
     print(f"\n{'='*70}")
-    print(f"Phương pháp: {method_name}")
+    print(f"Phương pháp: MRV + LCV + Forward Checking")
     print(f"Bộ dữ liệu: {dataset_folder}")
     print(f"Thời gian dự án: {project_start_date.strftime('%d/%m/%Y %H:%M')} - {project_end_date.strftime('%d/%m/%Y %H:%M')}")
     print(f"{'='*70}\n")
@@ -540,7 +630,7 @@ def main():
     import time
     start_time = time.time()
     
-    csp = solve_csp(dataset_folder, project_start_date, project_end_date, use_heuristics, use_forward_checking_flag)
+    csp = solve_csp(dataset_folder, project_start_date, project_end_date)
     
     end_time = time.time()
     execution_time = end_time - start_time
@@ -552,8 +642,7 @@ def main():
     print(f"{'='*70}")
     
     if csp.solution_found:
-        suffix = "model_main" if method_choice == '1' else "baseline"
-        export_to_csv(csp, f"task_assignment_{dataset_map[choice]}_{suffix}.csv")
+        export_to_csv(csp, f"task_assignment_{dataset_map[choice]}_model_main.csv")
 
 if __name__ == "__main__":
     main()
