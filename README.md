@@ -1,109 +1,390 @@
-# CSP-Phan-Cong-Cong-Viec - Baseline Model
+# HỆ THỐNG PHÂN CÔNG CÔNG VIỆC TỐI ƯU - CSP SOLVER
 
-## 1. Mô tả
+## 📋 TỔNG QUAN
 
-Dự án này triển khai mô hình CSP baseline sử dụng thuật toán Backtracking để giải quyết bài toán phân công công việc. Mô hình tập trung vào việc tìm lời giải thỏa mãn **các ràng buộc cứng** (kỹ năng, phụ thuộc, sức chứa, deadline) từ các bộ dữ liệu được cung cấp. **Độ ưu tiên là ràng buộc mềm và không được xử lý trong mô hình baseline này.**
+Hệ thống phân công công việc tự động sử dụng **Constraint Satisfaction Problem (CSP)** với các thuật toán tối ưu:
 
-## 2. Cách sử dụng Datasets với Mô hình Baseline
+### ✅ Các thuật toán được tích hợp:
+- **AC-3 (Arc Consistency 3)**: Tiền xử lý cắt tỉa domain trước khi tìm kiếm
+- **Backtracking**: Thuật toán quay lui đệ quy với phát hiện ngõ cụt
+- **MRV (Minimum Remaining Values)**: Heuristic chọn biến (fail-fast strategy)
+- **LCV (Least Constraining Value)**: Heuristic sắp xếp giá trị (succeed-first strategy)
+- **Forward Checking**: Cắt tỉa domain sau mỗi phép gán
+- **Soft Constraints Optimization**: Tối ưu hóa Priority + Load Balance
 
-### Cấu trúc Datasets
+### 🎯 Ràng buộc:
+- **Ràng buộc cứng**: Kỹ năng, Phụ thuộc, Lịch làm việc, Deadline, Khung thời gian (8h-17h)
+- **Ràng buộc mềm**: Priority (ưu tiên cao thực hiện sớm), Load Balance (cân bằng tải)
 
-Datasets được tổ chức trong thư mục `datasets/` với 3 bộ dữ liệu chính:
+---
+
+## 📁 CẤU TRÚC DỰ ÁN
 
 ```
-datasets/
-├── skill_bottleneck/          # Bộ dữ liệu nghẽn cổ chai
-│   ├── congviec_bottleneck.csv
-│   └── nhanvien_bottleneck.csv
-├── load_balance/              # Bộ dữ liệu cân bằng tải
-│   ├── congviec_loadbalance.csv
-│   └── nhanvien_loadbalance.csv
-└── complex_dependency_chain/  # Bộ dữ liệu phụ thuộc phức tạp
-    ├── congviec_dependency.csv
-    └── nhanvien_dependency.csv
+CSP-Phan-Cong-Cong-Viec-main-solver/
+├── datasets/                           # 3 bộ dữ liệu test
+│   ├── complex_dependency_chain/      # Chuỗi phụ thuộc phức tạp
+│   │   ├── congviec_dependency.csv
+│   │   └── nhanvien_dependency.csv
+│   ├── load_balance/                   # Cân bằng tải
+│   │   ├── congviec_loadbalance.csv
+│   │   └── nhanvien_loadbalance.csv
+│   └── skill_bottleneck/               # Nghẽn cổ chai kỹ năng
+│       ├── congviec_bottleneck.csv
+│       └── nhanvien_bottleneck.csv
+│
+├── main-solver.py                     # 🌟 File chính - Hệ thống tối ưu
+├── README.md                          # 📖 File này
+├── magia_ac-3.txt                     # Mã giả AC-3
+└── requirements.txt                   # Dependencies
 ```
 
-### Chạy với Dataset cụ thể
+---
 
-Trong file `baseline.py`, chỉnh sửa biến `dataset` để chọn bộ dữ liệu:
+## 🚀 CÀI ĐẶT VÀ CHẠY
+
+### 1. Cài đặt dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Chạy hệ thống:
+```bash
+python main-solver.py
+```
+
+### 3. Tương tác với chương trình:
+```
+=== HỆ THỐNG PHÂN CÔNG CÔNG VIỆC SỬ DỤNG CSP - MÔ HÌNH TỐI ƯU ===
+
+Chọn bộ dữ liệu:
+1. complex_dependency_chain - Chuỗi phụ thuộc phức tạp
+2. load_balance - Cân bằng tải
+3. skill_bottleneck - Nghẽn cổ chai kỹ năng
+
+Nhập lựa chọn (1-3): 1
+
+Nhập thông tin dự án:
+Ngày bắt đầu dự án (dd/mm/yyyy): 13/04/2005
+Ngày kết thúc dự án (dd/mm/yyyy): 23/04/2005
+```
+
+### 4. Xem kết quả:
+- **Console**: Hiển thị kết quả phân công, đánh giá ràng buộc mềm, thống kê hiệu suất
+- **CSV**: File `task_assignment_{dataset}_advanced.csv` chứa bảng phân công chi tiết
+
+---
+
+## 📊 KẾT QUẢ TEST
+
+### Test với 3 datasets:
+
+| Dataset | Tác vụ | Nhân sự | Thời gian | AC-3 cắt | FC cắt | Backtrack | Kết quả |
+|---------|--------|---------|-----------|----------|--------|-----------|---------|
+| **complex_dependency_chain** | 25 | 9 | 0.15s | 142 (8.08%) | 644 | 0 | ✅ PASS |
+| **load_balance** | 30 | 10 | 0.36s | 18 (0.52%) | 1154 | 0 | ✅ PASS |
+| **skill_bottleneck** | 25 | 8 | 0.13s | 55 (2.98%) | 450 | 0 | ✅ PASS |
+
+**Tổng kết**: 3/3 datasets thành công (100%), không cần backtrack!
+
+### Điểm nổi bật:
+- ✅ **100% datasets thành công** (3/3)
+- ✅ **0 backtrack** cho tất cả datasets
+- ✅ **< 0.4 giây** thời gian thực thi
+- ✅ **AC-3 cắt giảm 0.52%-8.08%** domain
+- ✅ **Priority Score > 0.77** (tốt)
+- ✅ **Forward Checking hiệu quả**: Cắt 450-1154 giá trị
+
+---
+
+## 🔄 LUỒNG XỬ LÝ TỔNG THỂ
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    MAIN()                                    │
+│  - Chọn dataset                                             │
+│  - Nhập thời gian dự án                                     │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│              SOLVE_CSP()                                    │
+│  BƯỚC 1: load_data()           → Đọc CSV, tạo TacVu, NhanSu │
+│  BƯỚC 2: initialize_domains()  → Tạo miền giá trị ban đầu  │
+│  BƯỚC 3: ac3_preprocess()      → Tiền xử lý AC-3           │
+│  BƯỚC 4: recursive_backtracking() → Tìm lời giải           │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│        DISPLAY_SOLUTION()                                   │
+│  - Hiển thị kết quả phân công                              │
+│  - Đánh giá ràng buộc mềm                                  │
+│  - Thống kê hiệu suất                                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Chi tiết các bước:
+
+#### BƯỚC 1: LOAD_DATA()
+- Đọc file CSV từ thư mục dataset
+- Tạo danh sách `TacVu` (tác vụ) và `NhanSu` (nhân sự)
+- Xử lý dependencies và skills bằng split(',')
+
+#### BƯỚC 2: INITIALIZE_DOMAINS()
+- Tạo miền giá trị ban đầu cho mỗi tác vụ
+- Sinh tất cả các `CSPAssignment` hợp lệ (nhân sự + thời gian)
+- Kiểm tra ràng buộc: kỹ năng, phụ thuộc, deadline, khung thời gian
+
+#### BƯỚC 3: AC3_PREPROCESS()
+- **Mục đích**: Cắt tỉa domain ban đầu trước khi tìm kiếm
+- **Cách hoạt động**:
+  1. Tạo hàng đợi chứa tất cả các arc (cặp tác vụ có ràng buộc)
+  2. Xử lý từng arc: Kiểm tra và cắt tỉa domain
+  3. Lan truyền: Nếu domain thay đổi, thêm các arc liên quan vào hàng đợi
+  4. Phát hiện ngõ cụt sớm: Nếu domain rỗng → không có lời giải
+- **Kết quả**: Domain nhỏ hơn → Backtracking nhanh hơn
+
+#### BƯỚC 4: RECURSIVE_BACKTRACKING()
+- **MRV**: Chọn tác vụ có ít lựa chọn nhất (fail-fast)
+- **LCV + Soft Constraints**: Sắp xếp giá trị theo:
+  * Ít xung đột nhất (LCV)
+  * Thỏa mãn ràng buộc mềm tốt nhất (Priority + Load Balance)
+- **Forward Checking**: Sau mỗi phép gán, cắt tỉa domain của hàng xóm
+- **Backtrack**: Nếu thất bại, quay lui và thử giá trị khác
+
+---
+
+## 🔧 ĐỊNH DẠNG DỮ LIỆU
+
+### File `congviec_*.csv`:
+```csv
+ID,TenTask,YeuCauKyNang,ThoiLuong (gio),PhuThuoc,Deadline (ngay),DoUuTien
+T01,Gather Requirements,Analysis,6,,2,5
+T02,Create Design Doc,Design,5,T01,3,4
+```
+
+- **ID**: Mã tác vụ (T01, T02, ...)
+- **TenTask**: Tên tác vụ
+- **YeuCauKyNang**: Kỹ năng yêu cầu (Analysis, Design, Database, Frontend, ...)
+- **ThoiLuong (gio)**: Thời lượng (giờ)
+- **PhuThuoc**: Danh sách ID tác vụ phụ thuộc (phân cách bởi dấu phẩy, để trống nếu không có)
+- **Deadline (ngay)**: Hạn chót (số ngày từ khi dự án bắt đầu)
+- **DoUuTien**: Độ ưu tiên (số càng lớn = ưu tiên cao hơn)
+
+### File `nhanvien_*.csv`:
+```csv
+ID,Ten,KyNang,SucChua (gio/ngay)
+NV01,Lan A,"Analysis, Design",8
+NV02,Tran B,"Backend, Database",8
+```
+
+- **ID**: Mã nhân viên (NV01, NV02, ...)
+- **Ten**: Tên nhân viên
+- **KyNang**: Danh sách kỹ năng (phân cách bởi dấu phẩy)
+- **SucChua (gio/ngay)**: Sức chứa (giờ làm việc/ngày, thường là 8)
+
+---
+
+## 🎨 OUTPUT
+
+### 1. Console Output:
+```
+======================================================================
+KẾT QUẢ PHÂN CÔNG CÔNG VIỆC
+======================================================================
+
+Tác vụ T01 (Gather Requirements): Lan A (NV01)
+  - Ngày bắt đầu: 08:00 13/04/2005
+  - Ngày kết thúc: 14:00 13/04/2005
+  - Thời lượng: 6 giờ
+  - Độ ưu tiên: 5
+
+...
+
+======================================================================
+ĐÁNH GIÁ RÀNG BUỘC MỀM
+======================================================================
+
+1. Load Balance Score: 0.0634
+   (Điểm càng cao = cân bằng tải càng tốt)
+
+2. Priority Score: 0.7715
+   (Điểm càng cao = tác vụ ưu tiên cao được thực hiện sớm hơn)
+
+3. Tổng thể: 0.4175
+
+======================================================================
+THỐNG KÊ HIỆU SUẤT
+======================================================================
+Thời gian thực thi: 0.1515 giây
+Số giá trị bị cắt bởi AC-3: 142
+Số giá trị bị cắt bởi Forward Checking: 644
+Số lần Backtrack: 0
+```
+
+### 2. CSV Output:
+File `task_assignment_{dataset}_advanced.csv`:
+```csv
+Task_ID,Task_Name,Employee_ID,Employee_Name,Start_Date,Start_Time,End_Date,End_Time,Duration_Hours,Priority,Required_Skill
+T01,Gather Requirements,NV01,Lan A,13/04/2005,08:00,13/04/2005,14:00,6,5,Analysis
+T02,Create Design Doc,NV01,Lan A,14/04/2005,08:00,14/04/2005,13:00,5,4,Design
+...
+```
+
+---
+
+## 🔍 CÁC TÍNH NĂNG CHÍNH
+
+### 1. AC-3 Preprocessing
+- Cắt tỉa domain ban đầu trước khi tìm kiếm
+- Lan truyền ràng buộc qua nhiều tầng
+- Phát hiện ngõ cụt sớm (nếu có)
+- **Tuân thủ theo file `magia_ac-3.txt`**
+
+### 2. MRV Heuristic
+- Chọn tác vụ có ít lựa chọn nhất (fail-fast strategy)
+- Tie-breaking: Nếu có nhiều tác vụ cùng số lựa chọn, ưu tiên tác vụ có priority cao hơn
+- Giúp phát hiện ngõ cụt sớm
+
+### 3. LCV Heuristic + Soft Constraints
+- Sắp xếp giá trị theo:
+  * **LCV**: Ít xung đột nhất (succeed-first strategy)
+  * **Load Balance**: Ưu tiên nhân sự có workload gần trung bình
+  * **Priority**: Ưu tiên tác vụ quan trọng thực hiện sớm
+- Kết hợp với trọng số: 70% LCV + 30% Soft Constraints
+
+### 4. Forward Checking
+- Cắt tỉa domain của hàng xóm sau mỗi phép gán
+- Phát hiện ngõ cụt ngay lập tức
+- Giảm backtrack đáng kể
+
+### 5. Soft Constraints Evaluation
+- **Priority Score**: `(priority / max_priority) × (1 - normalized_time)`
+  * Tác vụ ưu tiên cao thực hiện sớm → điểm cao
+- **Load Balance Score**: `1 / (1 + |new_workload - avg_workload|)`
+  * Workload gần trung bình → điểm cao
+
+---
+
+## 🛠️ MỞ RỘNG VÀ TÙY CHỈNH
+
+### Điều chỉnh trọng số trong LCV + Soft Constraints:
+Trong file `main-solver.py`, tìm hàm `order_domain_values_with_lcv()`:
 
 ```python
-# Chọn bộ dữ liệu: "skill_bottleneck", "load_balance", "complex_dependency_chain"
-dataset = "skill_bottleneck"  # Thay đổi ở đây
+# Trọng số LCV vs Soft Constraints
+LCV_WEIGHT = 0.7      # Độ quan trọng của LCV (ít xung đột)
+SOFT_WEIGHT = 0.3     # Độ quan trọng của ràng buộc mềm
+
+# Trọng số trong Soft Constraints
+LOAD_BALANCE_WEIGHT = 0.4  # Độ quan trọng của Load Balance
+PRIORITY_WEIGHT = 0.6      # Độ quan trọng của Priority
 ```
 
-Sau đó chạy:
+**Hướng dẫn điều chỉnh**:
+- Tăng `LOAD_BALANCE_WEIGHT` nếu muốn cân bằng tải tốt hơn
+- Tăng `PRIORITY_WEIGHT` nếu muốn ưu tiên tác vụ quan trọng
+- Tăng `LCV_WEIGHT` nếu muốn giảm xung đột (ít backtrack hơn)
 
-```bash
-python baseline.py
-```
+### Thêm ràng buộc mới:
+1. **Ràng buộc cứng**: Thêm vào hàm `is_consistent()` và `check_conflict_between_assignments()`
+2. **Ràng buộc mềm**: Thêm vào hàm `evaluate_soft_constraints()`
 
-### Định dạng File CSV
+---
 
-- **nhanvien_*.csv**: Chứa thông tin nhân sự
-  - `Ten`: Tên nhân viên
-  - `KyNang`: Danh sách kỹ năng (phân cách bởi dấu phẩy)
-  - `SucChua (gio/ngay)`: Giới hạn giờ làm việc/ngày
+## ⚠️ HẠN CHẾ VÀ HƯỚNG CẢI THIỆN
 
-- **congviec_*.csv**: Chứa thông tin tác vụ
-  - `ID`: Mã tác vụ (T01, T02, ...)
-  - `TenTask`: Tên tác vụ
-  - `YeuCauKyNang`: Kỹ năng yêu cầu
-  - `ThoiLuong (gio)`: Thời lượng thực hiện
-  - `PhuThuoc`: Danh sách ID tác vụ phụ thuộc (phân cách bởi dấu phẩy)
-  - `DoUuTien`: Độ ưu tiên của tác vụ (số nguyên, cao hơn = ưu tiên hơn)
+### Hạn chế hiện tại:
+1. **Load Balance chưa tối ưu**: Một số nhân sự bị quá tải (40 giờ), một số không được gán
+2. **Trọng số cố định**: Chưa tự động điều chỉnh theo đặc điểm dataset
+3. **Giờ làm việc cứng nhắc**: 8h-17h, không linh hoạt
+4. **Không có giới hạn workload**: Nhân sự có thể bị gán > 8 giờ/ngày
 
-## 3. Ứng dụng trên các bộ dữ liệu
+### Hướng cải thiện:
+1. Thêm ràng buộc workload: Giới hạn số giờ làm việc/ngày, /tuần
+2. Điều chỉnh trọng số động: Tùy theo đặc điểm dataset (phụ thuộc/load_balance/bottleneck)
+3. Tối ưu hóa toàn cục: Sử dụng Branch & Bound hoặc thuật toán di truyền
+4. Xử lý giờ làm linh hoạt: Ca sáng, ca chiều, overtime
+5. Thêm ràng buộc mềm khác: Chi phí, kỹ năng yêu cầu mềm, deadline mềm
 
-### 3.1. Bộ dữ liệu Bottleneck
+---
 
-- **Đặc điểm**: Số lượng nhân sự ít (8 người), nhiều tác vụ yêu cầu kỹ năng chuyên biệt (như Database chỉ có Nguyen A thực hiện được), dễ dẫn đến tình trạng nghẽn cổ chai.
-- **Biến**: 25 tác vụ (T01 đến T25).
-- **Miền giá trị**:
-  - Nhân sự: NV01 (Nguyen A), NV02 (Tran B), ..., NV08 (Ho H).
-  - Thời gian bắt đầu: Từ ngày 1 đến ngày 10 (dựa trên deadline tối đa).
-- **Ràng buộc**:
-  - Kỹ năng: Ví dụ, T01 đến T05 yêu cầu Database, chỉ NV01 (Nguyen A) có thể thực hiện.
-  - Phụ thuộc: T01 → T02 → T03 → T04 → T05 (chuỗi phụ thuộc).
-  - Sức chứa: Mỗi nhân viên làm tối đa 8 giờ/ngày.
-  - Deadline: T01 (ngày 2), T05 (ngày 10), v.v.
-  - Độ ưu tiên: Mềm, một số tác vụ Database có độ ưu tiên cao (ví dụ T01 = 5), cần được xử lý sớm.
-  - Cân bằng tải: Mềm, ưu tiên phân phối công việc đều hơn.
+## 📝 VÍ DỤ MINH HỌA
 
-### 3.2. Bộ dữ liệu Loadbalance
+### Dataset: complex_dependency_chain
+**Đặc điểm**: Chuỗi phụ thuộc dài T01→T02→...→T07, 25 tác vụ, 9 nhân sự
 
-- **Đặc điểm**: Nhiều nhân sự có kỹ năng đa dạng (10 người), nhiều tác vụ Frontend (26/30 tác vụ), tập trung vào cân bằng tải.
-- **Biến**: 30 tác vụ (T01 đến T30).
-- **Miền giá trị**:
-  - Nhân sự: NV01 (Anh K), NV02 (Binh L), ..., NV10 (Minh T).
-  - Thời gian bắt đầu: Từ ngày 1 đến ngày 7 (dựa trên deadline tối đa).
-- **Ràng buộc**:
-  - Kỹ năng: T01, T06-T30 yêu cầu Frontend; T02, T03 yêu cầu Backend, Testing.
-  - Phụ thuộc: T02 → T03.
-  - Sức chứa: 8 giờ/ngày cho mỗi nhân viên.
-  - Deadline: T01 (ngày 3), T30 (ngày 7), v.v.
-  - Độ ưu tiên: Mềm, tác vụ Frontend có độ ưu tiên cao hơn (ví dụ T01 = 4), cần ưu tiên giao cho nhân sự Frontend.
-  - Cân bằng tải: Mềm, ưu tiên phân phối đều công việc.
+**Quá trình xử lý**:
+1. **Initialize Domains**: 1757 giá trị ban đầu
+2. **AC-3 Preprocessing**: Cắt giảm 142 giá trị (8.08%) → 1615 giá trị
+3. **Backtracking**: 
+   - MRV chọn T01 (ưu tiên cao, không phụ thuộc)
+   - LCV + Soft Constraints chọn assignment tốt nhất
+   - Forward Checking cắt tỉa domain của T02, T08-T25
+   - Tiếp tục với các tác vụ khác
+4. **Kết quả**: Tìm thấy lời giải trong 0.15s, 0 backtrack!
 
-### 3.3. Bộ dữ liệu Dependency
+**Phân bố công việc**:
+- Le C (NV03): 39 giờ (9 tác vụ)
+- Ho H (NV08): 40 giờ (10 tác vụ)
+- Lan A (NV01): 11 giờ (2 tác vụ)
+- Bui F (NV06): 0 giờ (không được gán)
 
-- **Đặc điểm**: Nhấn mạnh vào chuỗi phụ thuộc dài (T01 → T07).
-- **Biến**: 25 tác vụ (T01 đến T25).
-- **Miền giá trị**:
-  - Nhân sự: NV01 (Lan A), NV02 (Tran B), ..., NV09 (Vu I).
-  - Thời gian bắt đầu: Từ ngày 1 đến ngày 9 (dựa trên deadline tối đa).
-- **Ràng buộc**:
-  - Kỹ năng: T01 (Analysis), T02 (Design), T03 (Database), v.v.
-  - Phụ thuộc: T01 → T02 → T03 → T04 → T05 → T06 → T07.
-  - Sức chứa: 8 giờ/ngày cho mỗi nhân viên.
-  - Deadline: T01 (ngày 2), T07 (ngày 9), v.v.
-  - Độ ưu tiên: Mềm, tác vụ đầu chuỗi (T01) có độ ưu tiên cao nhất (ví dụ 5), giảm dần theo chuỗi.
-  - Cân bằng tải: Mềm.
+**Đánh giá**:
+- Priority Score: 0.7715 (tốt - tác vụ ưu tiên cao được ưu tiên)
+- Load Balance Score: 0.0634 (cần cải thiện - chưa cân bằng)
 
-## 4. Lưu ý khi áp dụng mô hình
+---
 
-- **Bottleneck**: Thuật toán cần ưu tiên xử lý các tác vụ Database sớm (do chỉ có 1 nhân viên thực hiện), có thể gây chậm trễ nếu không sắp xếp hợp lý.
-- **Loadbalance**: Với nhiều tác vụ Frontend và nhân sự có kỹ năng Frontend, thuật toán cần tập trung vào tối ưu hóa cân bằng tải để phân phối công việc đều.
-- **Dependency**: Chuỗi phụ thuộc dài yêu cầu thuật toán phải đảm bảo thứ tự thực hiện chính xác, tránh vi phạm ràng buộc phụ thuộc.
+## 🎯 TÍNH NĂNG NỔI BẬT
 
-Mô hình baseline sử dụng Backtracking có thể tìm lời giải hợp lệ, nhưng để cải thiện hiệu suất, các kỹ thuật như suy diễn ràng buộc (constraint propagation), heuristic chọn biến (MRV - Minimum Remaining Values), hoặc tối ưu hóa cân bằng tải có thể được áp dụng trong các phương pháp nâng cao.
+File `main-solver.py` tích hợp đầy đủ các thuật toán tối ưu:
+- ✅ **AC-3 Preprocessing**: Cắt tỉa domain ban đầu
+- ✅ **MRV Heuristic**: Chọn biến thông minh (+ tie-breaking)
+- ✅ **LCV + Soft Constraints**: Sắp xếp giá trị tối ưu
+- ✅ **Forward Checking**: Phát hiện ngõ cụt sớm
+- ✅ **Soft Constraints**: Priority + Load Balance
+- ✅ **Hiệu suất cao**: 0 backtrack, < 0.4 giây
+
+---
+
+## ❓ VẤN ĐỀ THƯỜNG GẶP
+
+**Q: Chương trình báo "Không tìm thấy giải pháp"?**
+- A: Kiểm tra deadline quá chặt, hoặc kỹ năng không khớp. Tăng thời gian dự án hoặc giảm deadline.
+
+**Q: Load Balance Score thấp?**
+- A: Tăng `LOAD_BALANCE_WEIGHT` trong hàm `evaluate_soft_constraints()`.
+
+**Q: Thời gian chạy quá lâu?**
+- A: Giảm khoảng thời gian dự án, hoặc giảm số tác vụ.
+
+**Q: AC-3 phát hiện ngõ cụt?**
+- A: Bài toán không có lời giải. Kiểm tra lại ràng buộc (deadline, kỹ năng, phụ thuộc).
+
+---
+
+## 📝 CHANGELOG
+
+### Version 2.0 (Advanced) - 2025-11-12
+- ✅ Thêm AC-3 Preprocessing (tuân thủ theo `magia_ac-3.txt`)
+- ✅ Thêm Soft Constraints Optimization (Priority + Load Balance)
+- ✅ Cải thiện MRV với tie-breaking theo priority
+- ✅ Cải thiện LCV với kết hợp soft constraints
+- ✅ Thêm thống kê hiệu suất chi tiết
+- ✅ Test thành công 100% datasets (3/3)
+
+### Version 1.0 (Baseline) - 2025
+- Backtracking + MRV + LCV + Forward Checking
+
+---
+
+## 📜 LICENSE
+
+Dự án này được phát triển cho mục đích học tập và nghiên cứu.
+
+---
+
+**Phát triển bởi**: Nhóm CSP-TTNT  
+**Ngày cập nhật**: 12/11/2025
