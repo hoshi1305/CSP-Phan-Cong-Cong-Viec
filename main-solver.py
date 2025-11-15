@@ -1,10 +1,11 @@
-# Mô hình chính với thuật toán Backtracking + Heuristics (MRV + LCV) + Forward Checking
+# Mô hình tối ưu: Backtracking + MRV + LCV + Forward Checking + AC-3 + Soft Constraints
 import csv
 import pandas as pd
 from datetime import datetime, timedelta
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Set
 import os
 import sys
+from collections import deque
 
 # Thiết lập mã hóa UTF-8 cho đầu ra (tránh lỗi font trên Windows)
 if sys.platform == "win32":
@@ -48,6 +49,10 @@ class CSP:
         self.solution_found = False
         # domains: task_id -> list of possible CSPAssignment
         self.domains: Dict[str, List[CSPAssignment]] = {}
+        # Thống kê để đánh giá
+        self.ac3_pruned_count = 0  # Số giá trị bị cắt bởi AC-3
+        self.fc_pruned_count = 0   # Số giá trị bị cắt bởi Forward Checking
+        self.backtrack_count = 0    # Số lần backtrack
 
 def load_data(dataset_folder: str) -> Tuple[List[TacVu], List[NhanSu]]:
     """Tải dữ liệu tác vụ và nhân sự từ các tệp CSV trong thư mục chỉ định"""
@@ -208,160 +213,10 @@ def initialize_domains(csp: CSP):
         else:
             csp.domains[tacvu.id] = get_domain_values(tacvu, csp)
 
-def count_conflicts(assignment: CSPAssignment, tacvu: TacVu, csp: CSP) -> int:
-    """
-    Đếm số lượng xung đột (conflicts) mà assignment này gây ra cho các tác vụ chưa gán khác.
-    Xung đột xảy ra khi assignment này làm giảm số lựa chọn hợp lệ của tác vụ khác.
-    """
-    conflicts = 0
-    task_end_time = assignment.start_time + timedelta(hours=tacvu.duration)
-    
-    # Duyệt qua tất cả các tác vụ chưa được gán
-    unassigned_tasks = [t for t in csp.cac_tacvu if t.id not in csp.assignment and t.id != tacvu.id]
-    
-    for other_task in unassigned_tasks:
-        # Kiểm tra xem việc gán này có ảnh hưởng đến tác vụ khác không
-        if other_task.required_skill in assignment.nhansu.skills:
-            # Tìm thời gian bắt đầu sớm nhất cho other_task
-            earliest_start = csp.project_start_date
-            for dep_task_id in other_task.dependencies:
-                if dep_task_id in csp.assignment:
-                    dep_assignment = csp.assignment[dep_task_id]
-                    dep_task = next(t for t in csp.cac_tacvu if t.id == dep_task_id)
-                    dep_end_time = dep_assignment.start_time + timedelta(hours=dep_task.duration)
-                    earliest_start = max(earliest_start, dep_end_time)
-                elif dep_task_id == tacvu.id:
-                    # Nếu other_task phụ thuộc vào tacvu hiện tại
-                    earliest_start = max(earliest_start, task_end_time)
-            
-            other_end_time = earliest_start + timedelta(hours=other_task.duration)
-            
-            # Kiểm tra xung đột thời gian với nhân sự này
-            if (assignment.start_time < other_end_time and 
-                task_end_time > earliest_start):
-                conflicts += 1
-    
-    return conflicts
-
-def order_domain_values_with_lcv(tacvu: TacVu, domain_values: List[CSPAssignment], csp: CSP) -> List[CSPAssignment]:
-    """
-    LCV (Least Constraining Value) Heuristic
-    Sắp xếp các giá trị miền, ưu tiên những giá trị ít gây xung đột nhất với các tác vụ khác (succeed-first strategy)
-    """
-    if not domain_values:
-        return domain_values
-    
-    # Tính điểm "phá đám" cho mỗi giá trị
-    value_conflict_scores = []
-    
-    for assignment in domain_values:
-        # Đếm số xung đột mà assignment này gây ra
-        conflicts = count_conflicts(assignment, tacvu, csp)
-        value_conflict_scores.append((assignment, conflicts))
-    
-    # Sắp xếp theo số xung đột tăng dần (ít xung đột nhất trước)
-    value_conflict_scores.sort(key=lambda x: x[1])
-    
-    # Trả về danh sách assignments đã sắp xếp
-    return [assignment for assignment, _ in value_conflict_scores]
-
-def select_variable_with_mrv(csp: CSP, current_domains: Dict[str, List[CSPAssignment]]) -> Optional[TacVu]:
-    """
-    MRV (Minimum Remaining Values) Heuristic
-    Chọn tác vụ có ít lựa chọn hợp lệ nhất (fail-fast strategy)
-    Sử dụng current_domains đã được cắt tỉa
-    """
-    unassigned_tasks = [tacvu for tacvu in csp.cac_tacvu if tacvu.id not in csp.assignment]
-    if not unassigned_tasks:
-        return None
-    
-    # Lọc các tác vụ có đủ điều kiện (phụ thuộc đã hoàn thành)
-    ready_tasks = []
-    for tacvu in unassigned_tasks:
-        dependencies_satisfied = all(dep in csp.assignment for dep in tacvu.dependencies)
-        if dependencies_satisfied:
-            ready_tasks.append(tacvu)
-    
-    if not ready_tasks:
-        return None
-    
-    # Tìm tác vụ có ít lựa chọn hợp lệ nhất dựa trên current_domains
-    tac_vu_kho_nhat = None
-    so_lua_chon_it_nhat = float('inf')
-    
-    for tacvu in ready_tasks:
-        domain_vals = current_domains.get(tacvu.id, [])
-        so_lua_chon = len(domain_vals)
-        if so_lua_chon < so_lua_chon_it_nhat:
-            so_lua_chon_it_nhat = so_lua_chon
-            tac_vu_kho_nhat = tacvu
-    
-    return tac_vu_kho_nhat
-
-def forward_checking(csp: CSP, assigned_task_id: str) -> Tuple[bool, Dict[str, List[CSPAssignment]]]:
-    """
-    Thực hiện Forward Checking - cắt tỉa domain hàng xóm
-    Mục đích: Phát hiện ngõ cụt sớm và giảm không gian tìm kiếm
-    
-    Trả về (success, removed_map):
-    - success: True nếu không phát hiện ngõ cụt, False nếu có domain trở thành rỗng
-    - removed_map: Map các giá trị đã bị cắt (để khôi phục khi backtrack)
-    """
-    removed_map: Dict[str, List[CSPAssignment]] = {}
-    assigned_task = next(t for t in csp.cac_tacvu if t.id == assigned_task_id)
-    assigned_assignment = csp.assignment[assigned_task_id]
-    
-    # Lấy tất cả hàng xóm của tác vụ vừa gán
-    neighbors = get_neighbors(assigned_task, csp)
-    
-    # Duyệt qua các hàng xóm chưa được gán
-    for neighbor_task in neighbors:
-        if neighbor_task.id not in csp.assignment:
-            original_domain = csp.domains.get(neighbor_task.id, [])
-            new_domain = []
-            removed_here: List[CSPAssignment] = []
-            
-            # Kiểm tra từng giá trị trong domain của hàng xóm
-            for neighbor_value in original_domain:
-                # Kiểm tra xung đột giữa assignment vừa gán và giá trị này
-                has_conflict = check_conflict_between_assignments(
-                    assigned_task, assigned_assignment,
-                    neighbor_task, neighbor_value,
-                    csp
-                )
-                
-                if not has_conflict:
-                    # Không xung đột → giữ lại
-                    new_domain.append(neighbor_value)
-                else:
-                    # Có xung đột → cắt bỏ
-                    removed_here.append(neighbor_value)
-            
-            # Lưu các giá trị đã cắt (để khôi phục sau)
-            if removed_here:
-                removed_map[neighbor_task.id] = removed_here
-            
-            # CẬP NHẬT domain mới (đã cắt tỉa)
-            csp.domains[neighbor_task.id] = new_domain
-            
-            # PHÁT HIỆN NGÕ CỤT SỚM (FAIL-FAST)
-            if len(csp.domains[neighbor_task.id]) == 0:
-                return False, removed_map  # Báo hiệu ngõ cụt!
-    
-    # Cắt tỉa tất cả hàng xóm mà không ai bị rỗng
-    return True, removed_map  # Thành công, có thể tiếp tục
-
-def restore_domains(csp: CSP, removed_map: Dict[str, List[CSPAssignment]]):
-    """Khôi phục miền sau khi backtrack dựa vào removed_map"""
-    for task_id, removed_vals in removed_map.items():
-        if task_id not in csp.domains:
-            csp.domains[task_id] = []
-        csp.domains[task_id].extend(removed_vals)
-
 def get_neighbors(tacvu: TacVu, csp: CSP) -> List[TacVu]:
     """
     Tìm những tác vụ có ràng buộc với tacvu (hàng xóm)
-    Giúp forward_checking biết cần kiểm tra những tác vụ nào
+    Giúp forward_checking và AC-3 biết cần kiểm tra những tác vụ nào
     
     Hàng xóm bao gồm:
     1. Tác vụ phụ thuộc VÀO tacvu
@@ -436,6 +291,388 @@ def check_conflict_between_assignments(task1: TacVu, assignment1: CSPAssignment,
     
     return False  # KHÔNG XUNG ĐỘT
 
+# ==================== AC-3 IMPLEMENTATION ====================
+
+def create_all_arcs(csp: CSP) -> List[Tuple[TacVu, TacVu]]:
+    """
+    Tạo danh sách tất cả các arc (cung) trong bài toán
+    Arc = Cặp (task_i, task_j) có ràng buộc với nhau
+    
+    Returns:
+        List of tuples: [(task_i, task_j), ...]
+    """
+    arcs = []
+    
+    for task_i in csp.cac_tacvu:
+        # Tìm tất cả hàng xóm của task_i (sử dụng hàm đã có)
+        neighbors = get_neighbors(task_i, csp)
+        
+        for task_j in neighbors:
+            # Thêm arc (task_i, task_j)
+            arcs.append((task_i, task_j))
+    
+    return arcs
+
+def revise(task_i: TacVu, task_j: TacVu, csp: CSP) -> bool:
+    """
+    Kiểm tra Arc(task_i, task_j) có consistent không
+    Nếu không, loại bỏ các giá trị không hợp lệ khỏi domain của task_i
+    
+    Returns:
+        True nếu có thay đổi domain của task_i
+        False nếu không có thay đổi
+    """
+    revised = False  # Cờ đánh dấu có thay đổi domain không
+    domain_i = csp.domains.get(task_i.id, [])
+    domain_j = csp.domains.get(task_j.id, [])
+    
+    # Danh sách giá trị cần loại bỏ
+    to_remove = []
+    
+    # Duyệt qua từng giá trị trong domain của task_i
+    for value_i in domain_i:
+        # Kiểm tra xem có TỒN TẠI ít nhất 1 giá trị trong domain_j
+        # sao cho (value_i, value_j) không xung đột không?
+        
+        found_consistent_value = False
+        
+        for value_j in domain_j:
+            # Kiểm tra xung đột giữa 2 assignment (sử dụng hàm đã có)
+            has_conflict = check_conflict_between_assignments(
+                task_i, value_i,
+                task_j, value_j,
+                csp
+            )
+            
+            # Nếu KHÔNG xung đột → Tìm được giá trị hợp lệ
+            if not has_conflict:
+                found_consistent_value = True
+                break  # Không cần kiểm tra thêm
+        
+        # Nếu KHÔNG TÌM ĐƯỢC giá trị nào hợp lệ
+        if not found_consistent_value:
+            # Đánh dấu để loại bỏ value_i khỏi domain của task_i
+            to_remove.append(value_i)
+            revised = True
+    
+    # Cắt tỉa domain
+    for value_to_remove in to_remove:
+        csp.domains[task_i.id].remove(value_to_remove)
+        csp.ac3_pruned_count += 1
+    
+    return revised  # True nếu có thay đổi, False nếu không
+
+def ac3_preprocess(csp: CSP) -> bool:
+    """
+    Áp dụng AC-3 để cắt tỉa domain ban đầu trước khi tìm kiếm
+    
+    Returns:
+        True nếu AC-3 thành công (không phát hiện ngõ cụt)
+        False nếu phát hiện domain rỗng (bài toán không có lời giải)
+    """
+    # Tạo hàng đợi chứa tất cả các arc (cung)
+    queue = deque(create_all_arcs(csp))
+    
+    # Xử lý từng arc trong hàng đợi
+    while queue:
+        # Lấy một arc ra khỏi hàng đợi
+        task_i, task_j = queue.popleft()
+        
+        # Kiểm tra và cắt tỉa domain của task_i dựa trên task_j
+        revised = revise(task_i, task_j, csp)
+        
+        # Nếu domain của task_i bị thay đổi
+        if revised:
+            # Kiểm tra ngõ cụt
+            if len(csp.domains[task_i.id]) == 0:
+                return False  # Phát hiện ngõ cụt!
+            
+            # LAN TRUYỀN: Thêm tất cả arc (task_k, task_i) vào hàng đợi
+            # (các hàng xóm của task_i cũng cần kiểm tra lại)
+            neighbors = get_neighbors(task_i, csp)
+            for task_k in neighbors:
+                if task_k.id != task_j.id:
+                    queue.append((task_k, task_i))
+    
+    # AC-3 hoàn thành mà không phát hiện ngõ cụt
+    return True
+
+# ==================== SOFT CONSTRAINTS OPTIMIZATION ====================
+
+def calculate_workload(nhansu: NhanSu, csp: CSP) -> int:
+    """Tính tổng số giờ làm việc đã được gán cho nhân sự"""
+    total_hours = 0
+    for task_id, assignment in csp.assignment.items():
+        if assignment.nhansu.id == nhansu.id:
+            task = next(t for t in csp.cac_tacvu if t.id == task_id)
+            total_hours += task.duration
+    return total_hours
+
+def calculate_load_balance_score(csp: CSP) -> float:
+    """
+    Tính điểm cân bằng tải (Load Balance)
+    Điểm càng cao = cân bằng càng tốt
+    Sử dụng độ lệch chuẩn: độ lệch càng nhỏ = cân bằng càng tốt
+    """
+    if not csp.assignment:
+        return 0.0
+    
+    workloads = [calculate_workload(nhansu, csp) for nhansu in csp.cac_nhansu]
+    avg_workload = sum(workloads) / len(workloads)
+    
+    # Tính độ lệch chuẩn
+    variance = sum((w - avg_workload) ** 2 for w in workloads) / len(workloads)
+    std_dev = variance ** 0.5
+    
+    # Chuyển đổi thành điểm: độ lệch càng nhỏ = điểm càng cao
+    # Sử dụng công thức: score = 1 / (1 + std_dev)
+    score = 1.0 / (1.0 + std_dev)
+    return score
+
+def calculate_priority_score(csp: CSP) -> float:
+    """
+    Tính điểm ưu tiên (Priority)
+    Ưu tiên các tác vụ có độ ưu tiên cao được thực hiện sớm
+    
+    Công thức: Tổng (priority × (1 - normalized_start_time))
+    """
+    if not csp.assignment:
+        return 0.0
+    
+    total_score = 0.0
+    project_duration = (csp.project_end_date - csp.project_start_date).total_seconds()
+    
+    for task_id, assignment in csp.assignment.items():
+        task = next(t for t in csp.cac_tacvu if t.id == task_id)
+        
+        # Tính thời điểm bắt đầu chuẩn hóa (0 = bắt đầu dự án, 1 = kết thúc dự án)
+        time_elapsed = (assignment.start_time - csp.project_start_date).total_seconds()
+        normalized_time = time_elapsed / project_duration if project_duration > 0 else 0
+        
+        # Tác vụ ưu tiên cao thực hiện sớm → điểm cao
+        task_score = task.priority * (1.0 - normalized_time)
+        total_score += task_score
+    
+    # Chuẩn hóa điểm (chia cho tổng priority của tất cả tác vụ)
+    total_priority = sum(t.priority for t in csp.cac_tacvu)
+    normalized_score = total_score / total_priority if total_priority > 0 else 0
+    
+    return normalized_score
+
+def evaluate_soft_constraints(assignment: CSPAssignment, tacvu: TacVu, csp: CSP) -> float:
+    """
+    Đánh giá mức độ thỏa mãn ràng buộc mềm cho một phép gán
+    Trả về điểm: điểm càng cao = càng tốt
+    
+    Ràng buộc mềm bao gồm:
+    1. Load Balance: Cân bằng tải giữa các nhân sự
+    2. Priority: Ưu tiên tác vụ có độ ưu tiên cao thực hiện sớm
+    """
+    # Tính workload hiện tại của nhân sự này
+    current_workload = calculate_workload(assignment.nhansu, csp)
+    new_workload = current_workload + tacvu.duration
+    
+    # Tính workload trung bình
+    total_assigned_hours = sum(calculate_workload(emp, csp) for emp in csp.cac_nhansu)
+    avg_workload = total_assigned_hours / len(csp.cac_nhansu) if csp.cac_nhansu else 0
+    
+    # 1. Load Balance Score: Ưu tiên nhân sự có workload thấp hơn
+    # Nếu new_workload gần avg_workload → điểm cao
+    load_balance_diff = abs(new_workload - avg_workload)
+    load_balance_score = 1.0 / (1.0 + load_balance_diff)
+    
+    # 2. Priority Score: Ưu tiên tác vụ có độ ưu tiên cao thực hiện sớm
+    project_duration = (csp.project_end_date - csp.project_start_date).total_seconds()
+    time_elapsed = (assignment.start_time - csp.project_start_date).total_seconds()
+    normalized_time = time_elapsed / project_duration if project_duration > 0 else 0
+    
+    # Tác vụ ưu tiên cao thực hiện sớm → điểm cao
+    max_priority = max((t.priority for t in csp.cac_tacvu), default=1)
+    priority_score = (tacvu.priority / max_priority) * (1.0 - normalized_time)
+    
+    # Kết hợp 2 điểm (trọng số có thể điều chỉnh)
+    LOAD_BALANCE_WEIGHT = 0.4
+    PRIORITY_WEIGHT = 0.6
+    
+    total_score = (LOAD_BALANCE_WEIGHT * load_balance_score + 
+                   PRIORITY_WEIGHT * priority_score)
+    
+    return total_score
+
+# ==================== HEURISTICS ====================
+
+def count_conflicts(assignment: CSPAssignment, tacvu: TacVu, csp: CSP) -> int:
+    """
+    Đếm số lượng xung đột (conflicts) mà assignment này gây ra cho các tác vụ chưa gán khác.
+    Xung đột xảy ra khi assignment này làm giảm số lựa chọn hợp lệ của tác vụ khác.
+    """
+    conflicts = 0
+    task_end_time = assignment.start_time + timedelta(hours=tacvu.duration)
+    
+    # Duyệt qua tất cả các tác vụ chưa được gán
+    unassigned_tasks = [t for t in csp.cac_tacvu if t.id not in csp.assignment and t.id != tacvu.id]
+    
+    for other_task in unassigned_tasks:
+        # Kiểm tra xem việc gán này có ảnh hưởng đến tác vụ khác không
+        if other_task.required_skill in assignment.nhansu.skills:
+            # Tìm thời gian bắt đầu sớm nhất cho other_task
+            earliest_start = csp.project_start_date
+            for dep_task_id in other_task.dependencies:
+                if dep_task_id in csp.assignment:
+                    dep_assignment = csp.assignment[dep_task_id]
+                    dep_task = next(t for t in csp.cac_tacvu if t.id == dep_task_id)
+                    dep_end_time = dep_assignment.start_time + timedelta(hours=dep_task.duration)
+                    earliest_start = max(earliest_start, dep_end_time)
+                elif dep_task_id == tacvu.id:
+                    # Nếu other_task phụ thuộc vào tacvu hiện tại
+                    earliest_start = max(earliest_start, task_end_time)
+            
+            other_end_time = earliest_start + timedelta(hours=other_task.duration)
+            
+            # Kiểm tra xung đột thời gian với nhân sự này
+            if (assignment.start_time < other_end_time and 
+                task_end_time > earliest_start):
+                conflicts += 1
+    
+    return conflicts
+
+def order_domain_values_with_lcv(tacvu: TacVu, domain_values: List[CSPAssignment], csp: CSP) -> List[CSPAssignment]:
+    """
+    LCV (Least Constraining Value) Heuristic + Soft Constraints Optimization
+    Sắp xếp các giá trị miền, ưu tiên:
+    1. Ít gây xung đột nhất (LCV)
+    2. Thỏa mãn ràng buộc mềm tốt nhất (Priority + Load Balance)
+    """
+    if not domain_values:
+        return domain_values
+    
+    # Tính điểm cho mỗi giá trị
+    value_scores = []
+    
+    for assignment in domain_values:
+        # 1. Đếm số xung đột (LCV)
+        conflicts = count_conflicts(assignment, tacvu, csp)
+        
+        # 2. Đánh giá ràng buộc mềm
+        soft_score = evaluate_soft_constraints(assignment, tacvu, csp)
+        
+        # Kết hợp điểm: ưu tiên ít xung đột + điểm ràng buộc mềm cao
+        # Xung đột càng ít = điểm càng cao
+        # Chuyển conflicts thành điểm âm để kết hợp
+        conflict_score = -conflicts
+        
+        # Trọng số kết hợp (có thể điều chỉnh)
+        LCV_WEIGHT = 0.7
+        SOFT_WEIGHT = 0.3
+        
+        total_score = LCV_WEIGHT * conflict_score + SOFT_WEIGHT * soft_score
+        
+        value_scores.append((assignment, total_score))
+    
+    # Sắp xếp theo điểm giảm dần (điểm cao nhất trước)
+    value_scores.sort(key=lambda x: x[1], reverse=True)
+    
+    # Trả về danh sách assignments đã sắp xếp
+    return [assignment for assignment, _ in value_scores]
+
+def select_variable_with_mrv(csp: CSP, current_domains: Dict[str, List[CSPAssignment]]) -> Optional[TacVu]:
+    """
+    MRV (Minimum Remaining Values) Heuristic + Priority Tie-Breaking
+    Chọn tác vụ có ít lựa chọn hợp lệ nhất (fail-fast strategy)
+    Nếu có nhiều tác vụ cùng số lựa chọn, ưu tiên tác vụ có priority cao hơn
+    """
+    unassigned_tasks = [tacvu for tacvu in csp.cac_tacvu if tacvu.id not in csp.assignment]
+    if not unassigned_tasks:
+        return None
+    
+    # Lọc các tác vụ có đủ điều kiện (phụ thuộc đã hoàn thành)
+    ready_tasks = []
+    for tacvu in unassigned_tasks:
+        dependencies_satisfied = all(dep in csp.assignment for dep in tacvu.dependencies)
+        if dependencies_satisfied:
+            ready_tasks.append(tacvu)
+    
+    if not ready_tasks:
+        return None
+    
+    # Tìm tác vụ có ít lựa chọn hợp lệ nhất dựa trên current_domains
+    min_choices = float('inf')
+    candidates = []
+    
+    for tacvu in ready_tasks:
+        domain_vals = current_domains.get(tacvu.id, [])
+        num_choices = len(domain_vals)
+        
+        if num_choices < min_choices:
+            min_choices = num_choices
+            candidates = [tacvu]
+        elif num_choices == min_choices:
+            candidates.append(tacvu)
+    
+    # Nếu có nhiều tác vụ cùng số lựa chọn, chọn tác vụ có priority cao nhất
+    if len(candidates) > 1:
+        candidates.sort(key=lambda t: t.priority, reverse=True)
+    
+    return candidates[0] if candidates else None
+
+# ==================== FORWARD CHECKING ====================
+
+def forward_checking(csp: CSP, assigned_task_id: str) -> Tuple[bool, Dict[str, List[CSPAssignment]]]:
+    """
+    Thực hiện Forward Checking - cắt tỉa domain hàng xóm
+    Mục đích: Phát hiện ngõ cụt sớm và giảm không gian tìm kiếm
+    
+    Trả về (success, removed_map):
+    - success: True nếu không phát hiện ngõ cụt, False nếu có domain trở thành rỗng
+    - removed_map: Map các giá trị đã bị cắt (để khôi phục khi backtrack)
+    """
+    removed_map: Dict[str, List[CSPAssignment]] = {}
+    assigned_task = next(t for t in csp.cac_tacvu if t.id == assigned_task_id)
+    assigned_assignment = csp.assignment[assigned_task_id]
+    
+    # Lấy tất cả hàng xóm của tác vụ vừa gán
+    neighbors = get_neighbors(assigned_task, csp)
+    
+    # Duyệt qua các hàng xóm chưa được gán
+    for neighbor_task in neighbors:
+        if neighbor_task.id not in csp.assignment:
+            original_domain = csp.domains.get(neighbor_task.id, [])
+            new_domain = []
+            removed_here: List[CSPAssignment] = []
+            
+            # Kiểm tra từng giá trị trong domain của hàng xóm
+            for neighbor_value in original_domain:
+                # Kiểm tra xung đột giữa assignment vừa gán và giá trị này
+                has_conflict = check_conflict_between_assignments(
+                    assigned_task, assigned_assignment,
+                    neighbor_task, neighbor_value,
+                    csp
+                )
+                
+                if not has_conflict:
+                    # Không xung đột → giữ lại
+                    new_domain.append(neighbor_value)
+                else:
+                    # Có xung đột → cắt bỏ
+                    removed_here.append(neighbor_value)
+                    csp.fc_pruned_count += 1
+            
+            # Lưu các giá trị đã cắt (để khôi phục sau)
+            if removed_here:
+                removed_map[neighbor_task.id] = removed_here
+            
+            # CẬP NHẬT domain mới (đã cắt tỉa)
+            csp.domains[neighbor_task.id] = new_domain
+            
+            # PHÁT HIỆN NGÕ CỤT SỚM (FAIL-FAST)
+            if len(csp.domains[neighbor_task.id]) == 0:
+                return False, removed_map  # Báo hiệu ngõ cụt!
+    
+    # Cắt tỉa tất cả hàng xóm mà không ai bị rỗng
+    return True, removed_map  # Thành công, có thể tiếp tục
+
+# ==================== BACKTRACKING ====================
+
 def recursive_backtracking(csp: CSP, current_domains: Dict[str, List[CSPAssignment]]) -> bool:
     """
     Giải bằng thuật toán quay lui đệ quy (backtracking) với MRV + LCV + Forward Checking
@@ -461,7 +698,7 @@ def recursive_backtracking(csp: CSP, current_domains: Dict[str, List[CSPAssignme
     if not domain_values:
         return False
     
-    # Sắp xếp theo LCV (Least Constraining Value) - luôn dùng
+    # Sắp xếp theo LCV + Soft Constraints (luôn dùng)
     domain_values = order_domain_values_with_lcv(tacvu, domain_values, csp)
     
     # Thử từng giá trị
@@ -493,15 +730,18 @@ def recursive_backtracking(csp: CSP, current_domains: Dict[str, List[CSPAssignme
         
         # 6. QUAY LUI (Backtrack) - Xóa assignment hiện tại
         del csp.assignment[tacvu.id]
+        csp.backtrack_count += 1
         # Vứt bỏ new_domains - vòng lặp tiếp theo dùng current_domains gốc
     
     # Nếu đã thử hết các giá trị mà không tìm được lời giải
     return False
 
+# ==================== MAIN SOLVER ====================
+
 def solve_csp(dataset_folder: str, project_start_date: datetime, project_end_date: datetime) -> CSP:
     """
     Hàm tổng hợp để giải bài toán CSP
-    Luôn sử dụng MRV + LCV + Forward Checking
+    Sử dụng: AC-3 Preprocessing + Backtracking + MRV + LCV + Forward Checking + Soft Constraints
     
     Args:
         dataset_folder: Đường dẫn tới thư mục dữ liệu
@@ -515,15 +755,35 @@ def solve_csp(dataset_folder: str, project_start_date: datetime, project_end_dat
     # Tạo đối tượng CSP
     csp = CSP(cac_tacvu, cac_nhansu, project_start_date, project_end_date)
     
+    print("\n[BƯỚC 1] Khởi tạo miền ban đầu...")
     # Khởi tạo miền ban đầu
     initialize_domains(csp)
+    initial_domain_size = sum(len(domain) for domain in csp.domains.values())
+    print(f"  → Tổng số giá trị trong miền ban đầu: {initial_domain_size}")
     
-    # Tạo bản sao initial_domains để truyền vào đệ quy
+    print("\n[BƯỚC 2] Tiền xử lý bằng AC-3...")
+    # BƯỚC MỚI: Tiền xử lý bằng AC-3
+    is_consistent = ac3_preprocess(csp)
+    
+    # Nếu AC-3 phát hiện domain rỗng → Không có lời giải
+    if not is_consistent:
+        print("  ✗ AC-3 phát hiện bài toán không có lời giải!")
+        print("  → Domain của một hoặc nhiều tác vụ đã trở thành rỗng.")
+        return csp
+    
+    after_ac3_size = sum(len(domain) for domain in csp.domains.values())
+    print(f"  ✓ AC-3 hoàn thành thành công!")
+    print(f"  → Tổng số giá trị sau AC-3: {after_ac3_size}")
+    print(f"  → Số giá trị bị cắt bởi AC-3: {csp.ac3_pruned_count}")
+    print(f"  → Tỷ lệ cắt giảm: {(initial_domain_size - after_ac3_size) / initial_domain_size * 100:.2f}%")
+    
+    print("\n[BƯỚC 3] Bắt đầu Backtracking với MRV + LCV + Forward Checking...")
+    # Tạo bản sao initial_domains đã được AC-3 cắt tỉa
     initial_domains = {}
     for task_id in csp.domains:
         initial_domains[task_id] = csp.domains[task_id].copy()
     
-    # Giải bằng quay lui với MRV + LCV + Forward Checking
+    # Gọi hàm đệ quy với domain đã được tối ưu
     recursive_backtracking(csp, initial_domains)
     
     return csp
@@ -531,13 +791,15 @@ def solve_csp(dataset_folder: str, project_start_date: datetime, project_end_dat
 def display_solution(csp: CSP):
     """Hiển thị kết quả phân công"""
     if not csp.solution_found:
-        print("Không tìm thấy giải pháp!")
+        print("\n✗ Không tìm thấy giải pháp!")
         return
     
     sorted_assignments = sorted(csp.assignment.items(), 
                               key=lambda x: x[1].start_time)
     
-    print("\n=== KẾT QUẢ PHÂN CÔNG CÔNG VIỆC ===\n")
+    print("\n" + "="*70)
+    print("KẾT QUẢ PHÂN CÔNG CÔNG VIỆC")
+    print("="*70 + "\n")
     
     for task_id, assignment in sorted_assignments:
         tacvu = next(t for t in csp.cac_tacvu if t.id == task_id)
@@ -547,7 +809,35 @@ def display_solution(csp: CSP):
         print(f"Tác vụ {tacvu.id} ({tacvu.name}): {assignment.nhansu.name} ({assignment.nhansu.id})")
         print(f"  - Ngày bắt đầu: {start_time.strftime('%H:%M %d/%m/%Y')}")
         print(f"  - Ngày kết thúc: {end_time.strftime('%H:%M %d/%m/%Y')}")
-        print(f"  - Thời lượng: {tacvu.duration} giờ\n")
+        print(f"  - Thời lượng: {tacvu.duration} giờ")
+        print(f"  - Độ ưu tiên: {tacvu.priority}\n")
+    
+    # Hiển thị điểm ràng buộc mềm
+    print("="*70)
+    print("ĐÁNH GIÁ RÀNG BUỘC MỀM")
+    print("="*70)
+    
+    load_balance_score = calculate_load_balance_score(csp)
+    priority_score = calculate_priority_score(csp)
+    
+    print(f"\n1. Load Balance Score: {load_balance_score:.4f}")
+    print("   (Điểm càng cao = cân bằng tải càng tốt)")
+    
+    print(f"\n2. Priority Score: {priority_score:.4f}")
+    print("   (Điểm càng cao = tác vụ ưu tiên cao được thực hiện sớm hơn)")
+    
+    print(f"\n3. Tổng thể: {(load_balance_score + priority_score) / 2:.4f}")
+    
+    # Hiển thị workload của từng nhân sự
+    print("\n" + "="*70)
+    print("PHÂN BỐ CÔNG VIỆC THEO NHÂN SỰ")
+    print("="*70 + "\n")
+    
+    for nhansu in csp.cac_nhansu:
+        workload = calculate_workload(nhansu, csp)
+        tasks_assigned = [task_id for task_id, assignment in csp.assignment.items() 
+                         if assignment.nhansu.id == nhansu.id]
+        print(f"{nhansu.name} ({nhansu.id}): {workload} giờ ({len(tasks_assigned)} tác vụ)")
 
 def export_to_csv(csp: CSP, filename: str = "task_assignment.csv"):
     """Xuất kết quả ra file CSV"""
@@ -579,22 +869,31 @@ def export_to_csv(csp: CSP, filename: str = "task_assignment.csv"):
     
     df = pd.DataFrame(csv_data)
     df.to_csv(filename, index=False, encoding='utf-8-sig')
-    print(f"\nKết quả đã được xuất ra file: {filename}")
+    print(f"\n✓ Kết quả đã được xuất ra file: {filename}")
     
-    print("\n=== BẢNG PHÂN CÔNG CÔNG VIỆC ===")
+    print("\n" + "="*70)
+    print("BẢNG PHÂN CÔNG CÔNG VIỆC")
+    print("="*70)
     print(df.to_string(index=False))
 
 def main():
     """Chương trình chính để chạy bộ giải CSP"""
-    print("=== HỆ THỐNG PHÂN CÔNG CÔNG VIỆC SỬ DỤNG CSP ===")
-    print("Mô hình: Backtracking + MRV + LCV + Forward Checking\n")
+    print("="*70)
+    print("HỆ THỐNG PHÂN CÔNG CÔNG VIỆC SỬ DỤNG CSP - MÔ HÌNH TỐI ƯU")
+    print("="*70)
+    print("\nCác thuật toán được tích hợp:")
+    print("  • AC-3 Preprocessing (Arc Consistency)")
+    print("  • Backtracking với MRV + LCV Heuristics")
+    print("  • Forward Checking")
+    print("  • Soft Constraints Optimization (Priority + Load Balance)")
+    print("="*70 + "\n")
     
     print("Chọn bộ dữ liệu:")
-    print("1. complex_dependency_chain")
-    print("2. load_balance") 
-    print("3. skill_bottleneck")
+    print("1. complex_dependency_chain - Chuỗi phụ thuộc phức tạp")
+    print("2. load_balance - Cân bằng tải") 
+    print("3. skill_bottleneck - Nghẽn cổ chai kỹ năng")
     
-    choice = input("Nhập lựa chọn (1-3): ").strip()
+    choice = input("\nNhập lựa chọn (1-3): ").strip()
     
     dataset_map = {
         '1': 'complex_dependency_chain',
@@ -622,10 +921,9 @@ def main():
         return
     
     print(f"\n{'='*70}")
-    print(f"Phương pháp: MRV + LCV + Forward Checking")
     print(f"Bộ dữ liệu: {dataset_folder}")
     print(f"Thời gian dự án: {project_start_date.strftime('%d/%m/%Y %H:%M')} - {project_end_date.strftime('%d/%m/%Y %H:%M')}")
-    print(f"{'='*70}\n")
+    print(f"{'='*70}")
     
     import time
     start_time = time.time()
@@ -635,14 +933,23 @@ def main():
     end_time = time.time()
     execution_time = end_time - start_time
     
+    if csp.solution_found:
+        print(f"\n✓ Tìm thấy lời giải!")
+    
     display_solution(csp)
     
     print(f"\n{'='*70}")
+    print("THỐNG KÊ HIỆU SUẤT")
+    print(f"{'='*70}")
     print(f"Thời gian thực thi: {execution_time:.4f} giây")
+    print(f"Số giá trị bị cắt bởi AC-3: {csp.ac3_pruned_count}")
+    print(f"Số giá trị bị cắt bởi Forward Checking: {csp.fc_pruned_count}")
+    print(f"Số lần Backtrack: {csp.backtrack_count}")
     print(f"{'='*70}")
     
     if csp.solution_found:
-        export_to_csv(csp, f"task_assignment_{dataset_map[choice]}_model_main.csv")
+        export_to_csv(csp, f"task_assignment_{dataset_map[choice]}_advanced.csv")
 
 if __name__ == "__main__":
     main()
+
