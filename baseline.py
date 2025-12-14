@@ -49,15 +49,10 @@ class CSP:
 def load_data(dataset_folder: str) -> Tuple[List[TacVu], List[NhanSu]]:
     """Tải dữ liệu tác vụ và nhân sự từ các tệp CSV trong thư mục chỉ định"""
     # Xác định tên file phù hợp dựa theo thư mục dữ liệu
-    if "complex_dependency_chain" in dataset_folder:
-        tasks_file = os.path.join(dataset_folder, "congviec_dependency.csv")
-        employees_file = os.path.join(dataset_folder, "nhanvien_dependency.csv")
-    elif "load_balance" in dataset_folder:
-        tasks_file = os.path.join(dataset_folder, "congviec_loadbalance.csv")
-        employees_file = os.path.join(dataset_folder, "nhanvien_loadbalance.csv")
-    elif "skill_bottleneck" in dataset_folder:
-        tasks_file = os.path.join(dataset_folder, "congviec_bottleneck.csv")
-        employees_file = os.path.join(dataset_folder, "nhanvien_bottleneck.csv")
+    if "small_project" in dataset_folder or "medium_project" in dataset_folder or "large_project" in dataset_folder or "uploaded_temp" in dataset_folder:
+        # Bộ dữ liệu: small, medium, large project hoặc uploaded
+        tasks_file = os.path.join(dataset_folder, "congviec.csv")
+        employees_file = os.path.join(dataset_folder, "nhanvien.csv")
     else:
         raise ValueError(f"Không nhận dạng được thư mục dữ liệu: {dataset_folder}")
     
@@ -318,16 +313,17 @@ def main():
     print("=== HỆ THỐNG PHÂN CÔNG CÔNG VIỆC SỬ DỤNG CSP ===\n")
     
     print("Chọn bộ dữ liệu:")
-    print("1. complex_dependency_chain")
-    print("2. load_balance") 
-    print("3. skill_bottleneck")
+    print("\n=== BỘ DỮ LIỆU CHÍNH (Đánh giá tổng quan) ===")
+    print("1. small_project - Dự án nhỏ (5 NV, 20 tasks)")
+    print("2. medium_project - Dự án vừa (14 NV, 32 tasks)")
+    print("3. large_project - Dự án lớn (15 NV, 50 tasks)")
     
-    choice = input("Nhập lựa chọn (1-3): ").strip()
+    choice = input("\nNhập lựa chọn (1-3): ").strip()
     
     dataset_map = {
-        '1': 'complex_dependency_chain',
-        '2': 'load_balance',
-        '3': 'skill_bottleneck'
+        '1': 'small_project',
+        '2': 'medium_project',
+        '3': 'large_project'
     }
     
     if choice not in dataset_map:

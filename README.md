@@ -1,319 +1,170 @@
-# HỆ THỐNG PHÂN CÔNG CÔNG VIỆC USING CSP
+# Phân Công Công Việc Tối Ưu Cho Nhóm Dự Án Phần Mềm
 
-## 📋 TỔNG QUAN
+## 📋 Mô tả dự án
 
-Dự án này triển khai **2 mô hình giải bài toán phân công công việc (Task Assignment)** sử dụng **Constraint Satisfaction Problem (CSP)**:
+Dự án này triển khai giải pháp phân công công việc tối ưu cho nhóm dự án phần mềm sử dụng **Constraint Satisfaction Problem (CSP)**. Hệ thống hỗ trợ quản lý dự án bằng cách tự động phân bổ nhiệm vụ cho nhân sự một cách khoa học, đảm bảo cân bằng tải và tối ưu hóa hiệu suất.
 
-1. **`baseline.py`** - Mô hình cơ bản (Baseline)
-2. **`main-solver.py`** - Mô hình tối ưu nâng cao (Advanced Solver)
+## 👥 Thông tin nhóm
 
-### 🎯 Bài toán
+**Nhóm 02** - Môn học: Trí Tuệ Nhân Tạo
 
-Phân công công việc cho nhân sự sao cho:
-- ✅ Thỏa mãn **tất cả ràng buộc cứng** (kỹ năng, phụ thuộc, deadline, sức chứa)
-- ✅ Tối ưu hóa **ràng buộc mềm** (ưu tiên cao thực hiện sớm, cân bằng tải)
-- ✅ Tìm lời giải nhanh, hiệu quả
+- **Giáo viên hướng dẫn**: Phùng Thế Bảo
+- **Nhóm trưởng**: Trần Quốc Đạt - 2033230061
+- **Thành viên**:
+  - Trần Thị Kiều Diễm - 2033230036
+  - Nguyễn Minh Tiến - 2033230259
+  - Phạm Nhật Nam - 2001230531
 
----
+## 🎯 Mục tiêu nghiên cứu
 
-## 🔍 TẠI SAO CẦN CẢ 2 MÔ HÌNH?
+- Mô hình hóa bài toán phân công công việc dưới dạng CSP với đầy đủ 5 ràng buộc cốt lõi
+- Xây dựng thuật toán giải quyết CSP sử dụng Backtracking kết hợp AC-3, Forward Checking, MRV, LCV
+- Tối ưu hóa lời giải để thỏa mãn cả ràng buộc cứng và mềm
+- Đánh giá hiệu quả của mô hình đề xuất so với phương pháp phân công thủ công
 
-### 📊 So sánh tổng quan
+## 🏗️ Kiến trúc hệ thống
 
-| Tiêu chí | **Baseline** | **Mô hình Chính** |
-|---------|------------|-------------------|
-| **Mục đích** | Tìm lời giải hợp lệ | Tối ưu hóa lời giải |
-| **Thuật toán chính** | Backtracking cơ bản | AC-3 + Backtracking + Heuristics |
-| **Tiền xử lý** | Không | AC-3 cắt tỉa domain |
-| **Heuristic biến** | Không | MRV (fail-fast) |
-| **Heuristic giá trị** | Không | LCV + Soft constraints (succeed-first) |
-| **Forward Checking** | Không | Có |
-| **Ràng buộc mềm** | Không xử lý | Tích hợp + Tối ưu |
-| **Trường hợp dùng** | Học tập, prototype | Production, thực tế |
+### Các thành phần chính:
 
-### 💡 Khi nào dùng mỗi mô hình?
+#### 1. **Biến (Variables)**
+- Mỗi tác vụ trong dự án là một biến
+- Miền giá trị: cặp {Nhân sự, Thời gian bắt đầu}
 
-**Dùng Baseline (`baseline.py`):**
-- 🎓 Học tập CSP cơ bản
-- 🧪 Prototype nhanh
-- 📚 Bài tập, kiểm tra
-- 🔍 Debug logic ràng buộc
+#### 2. **Ràng buộc (Constraints)**
 
-**Dùng Mô hình Chính (`main-solver.py`):**
-- 🏢 Hệ thống production
-- ⚡ Cần tốc độ cao
-- 🎯 Cần lời giải tối ưu
-- 📈 Dữ liệu lớn (30+ tác vụ)
+**Ràng buộc cứng:**
+- **Kỹ năng**: Nhân sự phải có kỹ năng phù hợp với yêu cầu tác vụ
+- **Phụ thuộc**: Tác vụ chỉ bắt đầu sau khi các tác vụ tiên quyết hoàn thành
+- **Giờ làm việc**: Tác vụ phải thực hiện trong khung giờ 8h-17h
+- **Không chồng chéo**: Cùng nhân sự không thực hiện nhiều tác vụ cùng lúc
+- **Deadline**: Tác vụ phải hoàn thành trước hạn chót
 
----
+**Ràng buộc mềm:**
+- **Cân bằng tải**: Phân bổ khối lượng công việc đồng đều
+- **Độ ưu tiên**: Ưu tiên thực hiện tác vụ quan trọng sớm hơn
 
-## 🚀 CÀI ĐẶT VÀ CHẠY
+#### 3. **Thuật toán giải quyết**
 
-### 1. Cài đặt dependencies:
+**Mô hình Baseline:**
+- Thuật toán Backtracking thuần túy
+- Tìm kiếm tuần tự không sử dụng heuristic
+
+**Mô hình Advanced:**
+- **Backtracking**: Thuật toán tìm kiếm chính
+- **AC-3**: Tiền xử lý để cắt tỉa không gian tìm kiếm
+- **Forward Checking**: Phát hiện sớm ngõ cụt
+- **MRV (Minimum Remaining Values)**: Chọn biến khó nhất trước
+- **LCV (Least Constraining Value)**: Chọn giá trị ít xung đột nhất
+
+## 💻 Công nghệ sử dụng
+
+- **Ngôn ngữ**: Python 3.12.x
+- **IDE**: Visual Studio Code
+- **Thư viện chính**:
+  - `pandas`, `openpyxl`: Xử lý dữ liệu Excel/CSV
+  - `tkinter`, `ttk`: Giao diện đồ họa
+  - `matplotlib`: Vẽ biểu đồ
+  - `datetime`, `collections.deque`: Xử lý thời gian và tối ưu thuật toán
+
+## 🚀 Cài đặt và chạy
+
+### Yêu cầu hệ thống
+- Python 3.12.x
+- Windows 10/11 64-bit
+- RAM: 8GB trở lên
+
+### Cài đặt dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Chạy mô hình Baseline:
+### Chạy chương trình
 ```bash
-python baseline.py
+python gui_app.py
 ```
 
-### 3. Chạy mô hình Advanced Solver:
+### Đóng gói thành file .exe
 ```bash
-python main-solver.py
+pyinstaller --onefile --windowed --icon=icon.ico gui_app.py
 ```
+
+## 📊 Kết quả thực nghiệm
+
+Thực nghiệm trên bộ dữ liệu **Medium Project** (14 nhân viên, 32 công việc):
+
+| Chỉ số | Baseline | Advanced | Cải thiện |
+|--------|----------|----------|-----------|
+| Thời gian chạy | 0.0568s | 2.7296s | - |
+| % Ràng buộc thỏa mãn | 98.4% | 100% | +1.6% |
+| Độ lệch chuẩn Workload | 8.84h | 3.93h | **+55.5%** |
+| Makespan | 5.2 ngày | 5.2 ngày | = |
+
+### Hiệu quả kỹ thuật:
+- **AC-3**: Cắt tỉa 19.48% không gian tìm kiếm (1267/6504 giá trị)
+- **Forward Checking**: Phát hiện sớm 229 xung đột
+- **Heuristics**: Giảm đáng kể số lần backtrack
+
+## 🎨 Giao diện người dùng
+
+### Tab Sắp xếp công việc
+- Chạy mô hình đơn (Baseline hoặc Advanced)
+- Hiển thị kết quả phân công dạng bảng
+- Xuất kết quả ra file Excel/CSV
+
+### Tab So sánh hiệu năng
+- Chạy song song cả hai mô hình
+- Hiển thị biểu đồ so sánh chi tiết
+- Thống kê thời gian thực thi và chất lượng lời giải
+
+## 📁 Cấu trúc thư mục
+
+```
+├── datasets/              # Bộ dữ liệu đầu vào
+├── data_test/            # Dữ liệu kiểm thử
+├── baseline/             # Module Baseline (Backtracking thuần)
+├── advanced/             # Module Advanced (CSP tối ưu)
+├── gui_app.py            # Giao diện chính
+├── requirements.txt      # Dependencies
+└── README.md            # Tài liệu này
+```
+
+## 🔬 Phạm vi áp dụng
+
+- **Quy mô**: 4-10 thành viên, 20-50 tác vụ
+- **Lĩnh vực**: Dự án phần mềm quy mô vừa và nhỏ
+- **Dữ liệu đầu vào**:
+  - Danh sách nhân sự (kỹ năng, thời gian rảnh)
+  - Danh sách tác vụ (yêu cầu, deadline, phụ thuộc)
+
+## 🚀 Hướng phát triển
+
+### 1. Cải thiện hiệu năng
+- Song song hóa thuật toán AC-3
+- Tối ưu hóa cấu trúc dữ liệu
+- Lưu cache kết quả tính toán
+
+### 2. Mở rộng ràng buộc
+- Ràng buộc về nghỉ ngơi, ngày lễ
+- Đa kỹ năng với mức độ thành thạo
+- Ưu tiên động dựa trên tiến độ
+
+### 3. Tích hợp Machine Learning
+- Dự đoán thời gian hoàn thành thực tế
+- Học heuristic từ dữ liệu lịch sử
+- Phân tích rủi ro dự án
+
+### 4. Giao diện nâng cao
+- Dashboard trực quan theo dõi tiến độ
+- Tùy chỉnh ràng buộc động
+- Báo cáo tự động chi tiết
+
+## 📚 Tài liệu tham khảo
+
+1. S. J. Russell and P. Norvig, *Artificial Intelligence: A Modern Approach*, 4th ed. Pearson, 2021.
+2. G. N. Yannakakis and J. Togelius, *Artificial Intelligence and Games*. Springer, 2018.
+3. R. Akerkar, *Artificial Intelligence for Business*. Springer, 2019.
+4. A. P. Castaño, *Practical Artificial Intelligence*. Apress, 2018.
 
 ---
 
-## 📁 CẤU TRÚC DỰ ÁN
-
-```
-CSP-Phan-Cong-Cong-Viec/
-├── datasets/                           # 3 bộ dữ liệu test
-│   ├── complex_dependency_chain/      # Chuỗi phụ thuộc phức tạp
-│   │   ├── congviec_dependency.csv
-│   │   └── nhanvien_dependency.csv
-│   ├── load_balance/                   # Cân bằng tải
-│   │   ├── congviec_loadbalance.csv
-│   │   └── nhanvien_loadbalance.csv
-│   └── skill_bottleneck/               # Nghẽn cổ chai kỹ năng
-│       ├── congviec_bottleneck.csv
-│       └── nhanvien_bottleneck.csv
-│
-├── baseline.py                         # Mô hình cơ bản
-├── main-solver.py                      # 🌟 Mô hình tối ưu nâng cao
-├── README.md                           # 📖 File này
-├── requirements.txt                    # Dependencies
-└── magia_ac-3.txt                      # Mã giả AC-3
-```
-
----
-
-## 🔧 ĐỊNH DẠNG DỮ LIỆU
-
-### File `congviec_*.csv`:
-```csv
-ID,TenTask,YeuCauKyNang,ThoiLuong (gio),PhuThuoc,Deadline (ngay),DoUuTien
-T01,Gather Requirements,Analysis,6,,2,5
-T02,Create Design Doc,Design,5,T01,3,4
-T03,Setup Database,Database,8,T02,4,3
-```
-
-- **ID**: Mã tác vụ (T01, T02, ...)
-- **TenTask**: Tên tác vụ
-- **YeuCauKyNang**: Kỹ năng yêu cầu
-- **ThoiLuong (gio)**: Thời lượng (giờ)
-- **PhuThuoc**: Danh sách ID tác vụ phụ thuộc (phân cách dấu phẩy)
-- **Deadline (ngay)**: Hạn chót (số ngày từ khi bắt đầu)
-- **DoUuTien**: Độ ưu tiên (cao hơn = ưu tiên hơn)
-
-### File `nhanvien_*.csv`:
-```csv
-ID,Ten,KyNang,SucChua (gio/ngay)
-NV01,Lan A,"Analysis, Design",8
-NV02,Tran B,"Backend, Database",8
-```
-
-- **ID**: Mã nhân viên
-- **Ten**: Tên nhân viên
-- **KyNang**: Danh sách kỹ năng
-- **SucChua (gio/ngay)**: Sức chứa (giờ/ngày)
-
----
-
-## 📖 CHI TIẾT 2 MÔ HÌNH
-
-### MFORM 1: BASELINE (`baseline.py`)
-
-**Thuật toán:**
-```
-Backtracking cơ bản
-├── Chọn tác vụ chưa phân công (tuần tự)
-├── Duyệt tất cả giá trị (nhân sự + ngày)
-├── Kiểm tra ràng buộc cứng
-├── Nếu hợp lệ → gán, tiếp tục đệ quy
-└── Nếu thất bại → backtrack
-```
-
-**Ưu điểm:**
-- ✅ Dễ hiểu, dễ debug
-- ✅ Có thể tìm lời giải cho bài toán đơn giản
-- ✅ Phù hợp với learning
-
-**Nhược điểm:**
-- ❌ Chậm (nhiều backtrack)
-- ❌ Không xử lý ràng buộc mềm
-- ❌ Không có tối ưu hóa domain
-
-**Ràng buộc:**
-- ✅ Kỹ năng: Nhân sự phải có kỹ năng yêu cầu
-- ✅ Phụ thuộc: Tác vụ phụ thuộc phải hoàn thành trước
-- ✅ Deadline: Phải hoàn thành trước hạn chót
-- ✅ Sức chứa: Không vượt quá giờ/ngày
-- ✅ Khung giờ: 8h-17h
-- ❌ Ưu tiên: Không xử lý
-- ❌ Cân bằng tải: Không xử lý
-
----
-
-### MODEL 2: MÔ HÌNH CHÍNH (`main-solver.py`)
-
-**Thuật toán:**
-```
-AC-3 (Tiền xử lý)
-  ↓
-Backtracking + MRV + LCV + Forward Checking
-├── AC-3: Cắt tỉa domain
-├── MRV: Chọn tác vụ có ít lựa chọn nhất (fail-fast)
-├── Forward Checking: Cắt domain hàng xóm sau mỗi gán
-├── LCV + Soft Constraints: Sắp xếp giá trị theo:
-│   ├── Ít xung đột nhất (LCV)
-│   ├── Priority cao → thực hiện sớm
-│   └── Load Balance tốt
-└── Backtrack (cực hiếm)
-```
-
-**Ưu điểm:**
-- ✅ Nhanh
-- ✅ Ít backtrack
-- ✅ Tối ưu hóa ràng buộc mềm
-- ✅ Xử lý dữ liệu lớn
-
-**Nhược điểm:**
-- ❌ Code phức tạp hơn
-- ❌ Khó debug
-
-**Ràng buộc:**
-- ✅ Kỹ năng: Nhân sự phải có kỹ năng yêu cầu
-- ✅ Phụ thuộc: Tác vụ phụ thuộc phải hoàn thành trước
-- ✅ Deadline: Phải hoàn thành trước hạn chót
-- ✅ Sức chứa: Không vượt quá giờ/ngày
-- ✅ Khung giờ: 8h-17h
-- ✅ Ưu tiên: Tác vụ priority cao được thực hiện sớm
-- ✅ Cân bằng tải: Phân phối công việc đều
-
----
-
-## 🔧 ĐỊNH DẠNG DỮ LIỆU
-
-### AC-3 (Arc Consistency 3)
-```
-Mục đích: Cắt tỉa domain ban đầu
-Cách hoạt động:
-1. Duyệt tất cả arc (cặp biến có ràng buộc)
-2. Nếu biến X có giá trị không tương thích với Y → xóa khỏi domain X
-3. Lặp lại cho đến khi không thay đổi
-4. Phát hiện ngõ cụt sớm (domain rỗng)
-
-Kết quả: Domain nhỏ hơn → tìm kiếm nhanh hơn
-```
-
-### MRV (Minimum Remaining Values)
-```
-Ý tưởng: Fail-fast strategy
-Cách hoạt động:
-1. Chọn biến có ít lựa chọn còn lại nhất
-2. Phát hiện mâu thuẫn sớm
-3. Giảm độ sâu của cây tìm kiếm
-
-Ví dụ: Nếu T05 chỉ còn 1 người thực hiện được → chọn T05 trước
-```
-
-### LCV (Least Constraining Value)
-```
-Ý tưởng: Succeed-first strategy
-Cách hoạt động:
-1. Sắp xếp giá trị theo số ít xung đột
-2. Thử giá trị ít ảnh hưởng đến biến khác trước
-3. Tăng xác suất thành công
-
-Ví dụ: Giao tác vụ cho người ít bận hơn trước
-```
-
-### Forward Checking
-```
-Mục đích: Cắt tỉa domain sau mỗi phép gán
-Cách hoạt động:
-1. Sau khi gán giá trị cho biến X
-2. Xóa các giá trị không tương thích khỏi domain biến khác
-3. Phát hiện ngõ cụt sớm
-
-Kết quả: Giảm không gian tìm kiếm
-```
-
----
-
-## 📈 OUTPUT
-
-### Console Output (Mô hình Chính):
-```
-======================================================================
-KẾT QUẢ PHÂN CÔNG CÔNG VIỆC
-======================================================================
-
-Tác vụ T01 (Gather Requirements): Lan A (NV01)
-  - Ngày bắt đầu: 08:00 13/04/2005
-  - Ngày kết thúc: 13/04/2005 14:00
-  - Thời lượng: 6 giờ
-  - Độ ưu tiên: 5
-
-Tác vụ T02 (Create Design Doc): Lan A (NV01)
-  - Ngày bắt đầu: 14/04/2005 08:00
-  - Ngày kết thúc: 14/04/2005 13:00
-  - Thời lượng: 5 giờ
-  - Độ ưu tiên: 4
-
-======================================================================
-ĐÁNH GIÁ RÀNG BUỘC MỀM
-======================================================================
-
-1. Load Balance Score: 0.0634
-   (Điểm càng cao = cân bằng tải càng tốt)
-
-2. Priority Score: 0.7715
-   (Điểm càng cao = tác vụ ưu tiên cao được thực hiện sớm hơn)
-
-3. Tổng thể: 0.4175
-
-======================================================================
-THỐNG KÊ HIỆU SUẤT
-======================================================================
-Thời gian thực thi: 0.1515 giây
-Số giá trị bị cắt bởi AC-3: 142 (8.08%)
-Số giá trị bị cắt bởi Forward Checking: 644
-Số lần Backtrack: 0
-```
-
-### CSV Output:
-File `task_assignment_{dataset}_advanced.csv`:
-```csv
-Task_ID,Task_Name,Employee_ID,Employee_Name,Start_Date,Start_Time,End_Date,End_Time,Duration_Hours,Priority,Required_Skill
-T01,Gather Requirements,NV01,Lan A,13/04/2005,08:00,13/04/2005,14:00,6,5,Analysis
-T02,Create Design Doc,NV01,Lan A,14/04/2005,08:00,14/04/2005,13:00,5,4,Design
-```
-
----
-
-## 💡 LỰA CHỌN MÔ HÌNH
-
-### Nên dùng Baseline nếu:
-- 🎓 Bạn đang học CSP
-- 🔧 Cần debug và hiểu rõ logic
-- 🧪 Dữ liệu nhỏ (< 15 tác vụ)
-- 📝 Viết báo cáo khoa học
-
-### Nên dùng Mô hình Chính nếu:
-- 🏢 Dùng trong sản phẩm thực tế
-- ⚡ Cần tốc độ cao
-- 📈 Dữ liệu lớn (> 20 tác vụ)
-- 🎯 Cần lời giải tối ưu
-- 👥 Cần optimize ưu tiên + cân bằng tải
-
----
-
-## 📚 REFERENCES
-
-- **AC-3**: Mackworth, A. K. (1977). Consistency in Networks of Relations
-- **CSP**: Russell, S., & Norvig, P. (2020). Artificial Intelligence: A Modern Approach
-- **Constraint Propagation**: Bessière, C., & Régin, J. C. (1996). Arc consistency for general constraint networks
+*Đồ án môn học Trí Tuệ Nhân Tạo - Trường Đại học Công Thương TP.HCM - 2025*

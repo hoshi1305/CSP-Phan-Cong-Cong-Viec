@@ -53,19 +53,44 @@ class CSP:
         self.ac3_pruned_count = 0  # Số giá trị bị cắt bởi AC-3
         self.fc_pruned_count = 0   # Số giá trị bị cắt bởi Forward Checking
         self.backtrack_count = 0    # Số lần backtrack
+        # Pre-compute neighbor map để tránh tính lại nhiều lần
+        self.neighbor_map: Dict[str, List[TacVu]] = self._build_neighbor_map()
+    
+    def _build_neighbor_map(self) -> Dict[str, List[TacVu]]:
+        """Xây dựng bản đồ hàng xóm một lần duy nhất khi khởi tạo CSP"""
+        neighbor_map = {}
+        for tacvu in self.cac_tacvu:
+            neighbors = set()
+            
+            # 1. Tác vụ phụ thuộc VÀO tacvu
+            for other_task in self.cac_tacvu:
+                if tacvu.id in other_task.dependencies:
+                    neighbors.add(other_task)
+            
+            # 2. Tác vụ mà tacvu phụ thuộc VÀO
+            for dep_id in tacvu.dependencies:
+                dep_task = next((t for t in self.cac_tacvu if t.id == dep_id), None)
+                if dep_task:
+                    neighbors.add(dep_task)
+            
+            # 3. Tác vụ cùng kỹ năng yêu cầu (cạnh tranh nhân sự)
+            for other_task in self.cac_tacvu:
+                if (other_task.required_skill == tacvu.required_skill and 
+                    other_task.id != tacvu.id and 
+                    other_task.required_skill):  # Chỉ xét nếu có yêu cầu kỹ năng
+                    neighbors.add(other_task)
+            
+            neighbor_map[tacvu.id] = list(neighbors)
+        
+        return neighbor_map
 
 def load_data(dataset_folder: str) -> Tuple[List[TacVu], List[NhanSu]]:
     """Tải dữ liệu tác vụ và nhân sự từ các tệp CSV trong thư mục chỉ định"""
     # Xác định tên file phù hợp dựa theo thư mục dữ liệu
-    if "complex_dependency_chain" in dataset_folder:
-        tasks_file = os.path.join(dataset_folder, "congviec_dependency.csv")
-        employees_file = os.path.join(dataset_folder, "nhanvien_dependency.csv")
-    elif "load_balance" in dataset_folder:
-        tasks_file = os.path.join(dataset_folder, "congviec_loadbalance.csv")
-        employees_file = os.path.join(dataset_folder, "nhanvien_loadbalance.csv")
-    elif "skill_bottleneck" in dataset_folder:
-        tasks_file = os.path.join(dataset_folder, "congviec_bottleneck.csv")
-        employees_file = os.path.join(dataset_folder, "nhanvien_bottleneck.csv")
+    if "small_project" in dataset_folder or "medium_project" in dataset_folder or "large_project" in dataset_folder or "uploaded_temp" in dataset_folder:
+        # Bộ dữ liệu: small, medium, large project hoặc uploaded
+        tasks_file = os.path.join(dataset_folder, "congviec.csv")
+        employees_file = os.path.join(dataset_folder, "nhanvien.csv")
     else:
         raise ValueError(f"Không nhận dạng được thư mục dữ liệu: {dataset_folder}")
     
@@ -215,35 +240,14 @@ def initialize_domains(csp: CSP):
 
 def get_neighbors(tacvu: TacVu, csp: CSP) -> List[TacVu]:
     """
-    Tìm những tác vụ có ràng buộc với tacvu (hàng xóm)
-    Giúp forward_checking và AC-3 biết cần kiểm tra những tác vụ nào
+    Lấy danh sách hàng xóm của tác vụ từ neighbor_map đã được tính trước
     
     Hàng xóm bao gồm:
     1. Tác vụ phụ thuộc VÀO tacvu
     2. Tác vụ mà tacvu phụ thuộc VÀO
     3. Tác vụ cùng kỹ năng yêu cầu (cạnh tranh nhân sự)
     """
-    neighbors = set()
-    
-    # 1. Tác vụ phụ thuộc VÀO tacvu
-    for other_task in csp.cac_tacvu:
-        if tacvu.id in other_task.dependencies:
-            neighbors.add(other_task)
-    
-    # 2. Tác vụ mà tacvu phụ thuộc VÀO
-    for dep_id in tacvu.dependencies:
-        dep_task = next((t for t in csp.cac_tacvu if t.id == dep_id), None)
-        if dep_task:
-            neighbors.add(dep_task)
-    
-    # 3. Tác vụ cùng kỹ năng yêu cầu (cạnh tranh nhân sự)
-    for other_task in csp.cac_tacvu:
-        if (other_task.required_skill == tacvu.required_skill and 
-            other_task.id != tacvu.id and 
-            other_task.required_skill):  # Chỉ xét nếu có yêu cầu kỹ năng
-            neighbors.add(other_task)
-    
-    return list(neighbors)
+    return csp.neighbor_map.get(tacvu.id, [])
 
 def check_conflict_between_assignments(task1: TacVu, assignment1: CSPAssignment, 
                                        task2: TacVu, assignment2: CSPAssignment, 
@@ -372,11 +376,15 @@ def ac3_preprocess(csp: CSP) -> bool:
     """
     # Tạo hàng đợi chứa tất cả các arc (cung)
     queue = deque(create_all_arcs(csp))
+    # Sử dụng set để theo dõi các arc đã có trong queue (tránh trùng lặp)
+    in_queue = set(queue)
     
     # Xử lý từng arc trong hàng đợi
     while queue:
         # Lấy một arc ra khỏi hàng đợi
-        task_i, task_j = queue.popleft()
+        arc = queue.popleft()
+        task_i, task_j = arc
+        in_queue.discard(arc)  # Xóa khỏi set theo dõi
         
         # Kiểm tra và cắt tỉa domain của task_i dựa trên task_j
         revised = revise(task_i, task_j, csp)
@@ -392,7 +400,11 @@ def ac3_preprocess(csp: CSP) -> bool:
             neighbors = get_neighbors(task_i, csp)
             for task_k in neighbors:
                 if task_k.id != task_j.id:
-                    queue.append((task_k, task_i))
+                    new_arc = (task_k, task_i)
+                    # Chỉ thêm nếu chưa có trong queue (tránh trùng lặp)
+                    if new_arc not in in_queue:
+                        queue.append(new_arc)
+                        in_queue.add(new_arc)
     
     # AC-3 hoàn thành mà không phát hiện ngõ cụt
     return True
@@ -595,13 +607,16 @@ def select_variable_with_mrv(csp: CSP, current_domains: Dict[str, List[CSPAssign
     if not ready_tasks:
         return None
     
+    # Domain sizes để tránh tính lại nhiều lần
+    domain_sizes = {tacvu.id: len(current_domains.get(tacvu.id, [])) 
+                    for tacvu in ready_tasks}
+    
     # Tìm tác vụ có ít lựa chọn hợp lệ nhất dựa trên current_domains
     min_choices = float('inf')
     candidates = []
     
     for tacvu in ready_tasks:
-        domain_vals = current_domains.get(tacvu.id, [])
-        num_choices = len(domain_vals)
+        num_choices = domain_sizes[tacvu.id]
         
         if num_choices < min_choices:
             min_choices = num_choices
@@ -617,16 +632,14 @@ def select_variable_with_mrv(csp: CSP, current_domains: Dict[str, List[CSPAssign
 
 # ==================== FORWARD CHECKING ====================
 
-def forward_checking(csp: CSP, assigned_task_id: str) -> Tuple[bool, Dict[str, List[CSPAssignment]]]:
+def forward_checking(csp: CSP, assigned_task_id: str) -> bool:
     """
     Thực hiện Forward Checking - cắt tỉa domain hàng xóm
     Mục đích: Phát hiện ngõ cụt sớm và giảm không gian tìm kiếm
     
-    Trả về (success, removed_map):
-    - success: True nếu không phát hiện ngõ cụt, False nếu có domain trở thành rỗng
-    - removed_map: Map các giá trị đã bị cắt (để khôi phục khi backtrack)
+    Returns:
+        True nếu không phát hiện ngõ cụt, False nếu có domain trở thành rỗng
     """
-    removed_map: Dict[str, List[CSPAssignment]] = {}
     assigned_task = next(t for t in csp.cac_tacvu if t.id == assigned_task_id)
     assigned_assignment = csp.assignment[assigned_task_id]
     
@@ -638,7 +651,6 @@ def forward_checking(csp: CSP, assigned_task_id: str) -> Tuple[bool, Dict[str, L
         if neighbor_task.id not in csp.assignment:
             original_domain = csp.domains.get(neighbor_task.id, [])
             new_domain = []
-            removed_here: List[CSPAssignment] = []
             
             # Kiểm tra từng giá trị trong domain của hàng xóm
             for neighbor_value in original_domain:
@@ -654,22 +666,17 @@ def forward_checking(csp: CSP, assigned_task_id: str) -> Tuple[bool, Dict[str, L
                     new_domain.append(neighbor_value)
                 else:
                     # Có xung đột → cắt bỏ
-                    removed_here.append(neighbor_value)
                     csp.fc_pruned_count += 1
-            
-            # Lưu các giá trị đã cắt (để khôi phục sau)
-            if removed_here:
-                removed_map[neighbor_task.id] = removed_here
             
             # CẬP NHẬT domain mới (đã cắt tỉa)
             csp.domains[neighbor_task.id] = new_domain
             
             # PHÁT HIỆN NGÕ CỤT SỚM (FAIL-FAST)
             if len(csp.domains[neighbor_task.id]) == 0:
-                return False, removed_map  # Báo hiệu ngõ cụt!
+                return False  # Báo hiệu ngõ cụt!
     
     # Cắt tỉa tất cả hàng xóm mà không ai bị rỗng
-    return True, removed_map  # Thành công, có thể tiếp tục
+    return True  # Thành công, có thể tiếp tục
 
 # ==================== BACKTRACKING ====================
 
@@ -719,7 +726,7 @@ def recursive_backtracking(csp: CSP, current_domains: Dict[str, List[CSPAssignme
         
         # 4. THỰC HIỆN FORWARD CHECKING (luôn dùng)
         # Hàm này sẽ cắt tỉa new_domains và phát hiện ngõ cụt sớm
-        forward_ok, forward_removed = forward_checking(csp, tacvu.id)
+        forward_ok = forward_checking(csp, tacvu.id)
         
         # 5. Nếu Forward Check không phát hiện ngõ cụt
         if forward_ok:
@@ -889,16 +896,17 @@ def main():
     print("="*70 + "\n")
     
     print("Chọn bộ dữ liệu:")
-    print("1. complex_dependency_chain - Chuỗi phụ thuộc phức tạp")
-    print("2. load_balance - Cân bằng tải") 
-    print("3. skill_bottleneck - Nghẽn cổ chai kỹ năng")
+    print("\n=== BỘ DỮ LIỆU CHÍNH (Đánh giá tổng quan) ===")
+    print("1. small_project - Dự án nhỏ (5 NV, 20 tasks)")
+    print("2. medium_project - Dự án vừa (14 NV, 32 tasks)")
+    print("3. large_project - Dự án lớn (15 NV, 50 tasks)")
     
     choice = input("\nNhập lựa chọn (1-3): ").strip()
     
     dataset_map = {
-        '1': 'complex_dependency_chain',
-        '2': 'load_balance',
-        '3': 'skill_bottleneck'
+        '1': 'small_project',
+        '2': 'medium_project',
+        '3': 'large_project'
     }
     
     if choice not in dataset_map:

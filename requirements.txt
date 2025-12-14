@@ -1,2 +1,4 @@
 python-constraint==1.4.0
 pandas==2.3.3
+openpyxl>=3.0.0
+matplotlib>=3.5.0

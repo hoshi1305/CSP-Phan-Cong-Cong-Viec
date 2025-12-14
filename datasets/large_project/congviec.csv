@@ -1,0 +1,51 @@
+ID,TenTask,YeuCauKyNang,ThoiLuong (gio),PhuThuoc,Deadline (ngay),DoUuTien
+T01,Phân tích yêu cầu dự án,Analysis,8,,2,10
+T02,Thiết kế kiến trúc hệ thống,Architecture,8,T01,4,10
+T03,Thiết kế lược đồ cơ sở dữ liệu,Database,8,T02,6,10
+T04,Thiết lập hệ thống ghi log,DevOps,8,,3,6
+T05,Thiết lập hệ thống giám sát,DevOps,8,T04,5,6
+T06,Thiết lập hệ thống cảnh báo,DevOps,8,T05,7,6
+T07,Di chuyển cơ sở dữ liệu 1,Database,8,,3,9
+T08,Di chuyển cơ sở dữ liệu 2,Database,8,T07,5,9
+T09,Tối ưu hóa cơ sở dữ liệu,Database,8,T08,7,9
+T10,API xác thực người dùng,Backend,8,T03,7,10
+T11,API quản lý tác giả,Backend,8,T10,9,10
+T12,API quản lý người dùng,Backend,8,T11,11,10
+T13,API quản lý sản phẩm,Backend,8,T03,7,10
+T14,API quản lý đơn hàng,Backend,8,T13,9,10
+T15,API xử lý thanh toán,Backend,8,T14,11,10
+T16,Trang đăng nhập,Frontend,8,T02,6,10
+T17,Trang đăng ký,Frontend,8,T16,8,10
+T18,Trang bảng điều khiển,Frontend,8,T17,10,10
+T19,Trang sản phẩm,Frontend,8,T18,12,10
+T20,Trang giỏ hàng,Frontend,8,T19,14,10
+T21,Trang thanh toán,Frontend,8,T20,16,10
+T22,Bảo mật xác thực,Security,8,T11,10,10
+T23,Bảo mật thanh toán,Security,8,T15,12,10
+T24,Bảo mật API quản lý người dùng,Security,8,T12,12,10
+T25,Bảo mật API quản lý đơn hàng,Security,8,T14,12,10
+T26,Bảo mật API quản lý sản phẩm,Security,8,T13,10,10
+T27,Tích hợp xác thực,Frontend,8,"T11,T16",11,10
+T28,Tích hợp sản phẩm,Frontend,8,"T13,T19",13,10
+T29,Tích hợp đơn hàng,Frontend,8,"T14,T20",14,10
+T30,Tích hợp thanh toán,Frontend,8,"T15,T21",16,10
+T31,Kiểm thử đơn vị A,Testing,8,,4,6
+T32,Kiểm thử đơn vị B,Testing,8,T31,6,6
+T33,Kiểm thử đơn vị C,Testing,8,T32,8,6
+T34,Kiểm thử tích hợp,Testing,8,"T27,T28",14,10
+T35,Kiểm thử đầu cuối,Testing,8,"T29,T30",17,10
+T36,Đánh giá chất lượng 1,QA,8,,5,7
+T37,Đánh giá chất lượng 2,QA,8,T36,7,7
+T38,Đánh giá chất lượng 3,QA,8,T37,9,7
+T39,Đánh giá chất lượng cuối cùng,QA,8,"T34,T35,T22,T23,T24,T25,T26",17,10
+T40,Tài liệu yêu cầu hệ thống,Documentation,8,,6,5
+T41,Tài liệu thiết kế chi tiết,Documentation,8,T40,8,5
+T42,Tài liệu hướng dẫn sử dụng,Documentation,8,T41,10,5
+T43,Trang giới thiệu,Frontend,8,,4,7
+T44,Trang liên hệ,Frontend,8,T43,6,7
+T45,Trang câu hỏi thường gặp,Frontend,8,T44,8,7
+T46,Trang điều khoản sử dụng,Frontend,8,T45,10,7
+T47,Trang chính sách bảo mật,Frontend,8,T46,12,7
+T48,Giao diện thông báo,Frontend,8,,5,8
+T49,Giao diện cài đặt,Frontend,8,T48,7,8
+T50,Giao diện hồ sơ cá nhân,Frontend,8,T49,9,8

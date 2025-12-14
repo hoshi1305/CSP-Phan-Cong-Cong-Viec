@@ -1,0 +1,33 @@
+ID,TenTask,YeuCauKyNang,ThoiLuong (gio),PhuThuoc,Deadline (ngay),DoUuTien
+T01,Phân tích yêu cầu hệ thống,Analysis,4,,4,7
+T02,Thiết kế kiến trúc tổng thể,Architecture,4,T01,6,7
+T03,Thiết kế database schema,Database,5,T02,8,8
+T04,Thiết kế API endpoints,Backend,4,T02,7,7
+T05,Thiết kế UI/UX mockup,Design,4,T01,5,7
+T06,Setup môi trường development,DevOps,3,T02,5,6
+T07,Xây dựng authentication service,Backend,5,T03,10,8
+T08,Xây dựng authorization service,Backend,4,T07,12,8
+T09,Xây dựng user management API,Backend,4,T07,11,7
+T10,Xây dựng product catalog API,Backend,5,T03,11,7
+T11,Xây dựng order management API,Backend,5,T03,12,8
+T12,Xây dựng payment integration,Backend,5,T11,15,8
+T13,Xây dựng trang đăng nhập,Frontend,3,T05,7,7
+T14,Xây dựng trang đăng ký,Frontend,3,T05,7,7
+T15,Xây dựng trang Dashboard,Frontend,4,T05,9,7
+T16,Xây dựng trang danh sách sản phẩm,Frontend,4,T05,10,7
+T17,Xây dựng trang chi tiết sản phẩm,Frontend,4,T16,11,7
+T18,Xây dựng trang giỏ hàng,Frontend,4,T16,12,8
+T19,Xây dựng trang thanh toán,Frontend,5,T18,14,8
+T20,Tích hợp authentication với backend,Frontend,4,"T08,T13",13,8
+T21,Tích hợp product API với frontend,Frontend,4,"T10,T16",13,7
+T22,Tích hợp order API với frontend,Frontend,4,"T11,T18",15,8
+T23,Tích hợp payment gateway,Frontend,5,"T12,T19",17,9
+T24,Setup unit testing framework,Testing,3,T06,6,5
+T25,Viết unit tests cho backend,Testing,5,T09,14,6
+T26,Viết unit tests cho frontend,Testing,4,T20,16,6
+T27,Viết API integration tests,Testing,5,T25,17,8
+T28,Viết E2E tests,Testing,5,T26,19,8
+T29,Kiểm thử bảo mật hệ thống,Security,5,T08,18,8
+T30,Viết tài liệu kỹ thuật,Documentation,4,"T04,T07",16,5
+T31,Rà soát code và tối ưu,QA,5,"T27,T29",20,8
+T32,Kiểm thử tổng thể cuối cùng,QA,5,T28,22,9

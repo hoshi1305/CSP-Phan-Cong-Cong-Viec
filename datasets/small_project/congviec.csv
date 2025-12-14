@@ -1,0 +1,21 @@
+ID,TenTask,YeuCauKyNang,ThoiLuong (gio),PhuThuoc,Deadline (ngay),DoUuTien
+T01,Phân tích yêu cầu hệ thống,Analysis,5,,4,7
+T02,Thiết kế cơ sở dữ liệu,Backend,5,T01,6,6
+T03,Thiết kế giao diện người dùng,Design,4,T01,6,5
+T04,Xây dựng API đăng nhập,Backend,4,T02,8,7
+T05,Xây dựng API đăng ký,Backend,4,T02,8,6
+T06,Xây dựng trang đăng nhập,Frontend,4,T03,8,6
+T07,Xây dựng trang đăng ký,Frontend,4,T03,8,5
+T08,Xây dựng trang chủ,Frontend,4,T03,9,6
+T09,Tích hợp API đăng nhập,Frontend,3,"T04,T06",10,7
+T10,Tích hợp API đăng ký,Frontend,3,"T05,T07",10,6
+T11,Kiểm thử đăng nhập,Testing,3,T09,12,6
+T12,Kiểm thử đăng ký,Testing,3,T10,12,5
+T13,Xây dựng API quản lý sản phẩm,Backend,5,T02,10,7
+T14,Xây dựng trang danh sách sản phẩm,Frontend,4,T08,11,6
+T15,Tích hợp API sản phẩm,Frontend,3,"T13,T14",12,7
+T16,Kiểm thử quản lý sản phẩm,Testing,4,T15,14,6
+T17,Setup môi trường development,DevOps,3,T02,7,5
+T18,Setup CI/CD pipeline,DevOps,3,T17,10,5
+T19,Viết tài liệu API,Documentation,4,"T04,T05,T13",13,5
+T20,Kiểm thử tổng thể hệ thống,QA,5,"T11,T12,T16",16,8
